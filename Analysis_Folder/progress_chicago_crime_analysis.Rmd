@@ -28,14 +28,14 @@ library(RCurl)
 library(shapefiles)
 library(maptools)
 library(spatstat)
-library(xts)
+library(xts) 
 library(highcharter)
 ```
 
 # Reading in Data
 
 ```{r}
-crime.data <- read.csv("https://data.cityofchicago.org/api/views/ijzp-q8t2/rows.csv?accessType=DOWNLOAD",nrows = 50000)
+crime.data <- read.csv("https://data.cityofchicago.org/api/views/ijzp-q8t2/rows.csv?accessType=DOWNLOAD",nrows = 5000)
 ```
 
 # Cleaning of data
@@ -149,7 +149,7 @@ cleaned.crime.data$crime <- as.factor(cleaned.crime.data$crime)
 by_Date <- cleaned.crime.data %>% group_by(Date) %>% summarise(Total = n())
 tseries <- xts(by_Date$Total, order.by=as.POSIXct(by_Date$Date))
 
-Arrests_by_Date$Date[!(Arrests_by_Date$Date %in% by_Date$Date)]
+#Arrests_by_Date$Date[!(Arrests_by_Date$Date %in% by_Date$Date)]
 ## Creating timeseries of arrests made
 Arrests_by_Date <- (cleaned.crime.data[cleaned.crime.data$Arrest == 'true',]) %>% group_by(Date) %>% summarise(Total = n())
 arrests_tseries <- xts(Arrests_by_Date$Total, order.by=as.POSIXct(Arrests_by_Date$Date))
@@ -172,14 +172,17 @@ hchart(tseries, name = "crime") %>%
 # %-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0
 ```
 
+# Cluster Identification Methods
 
-# Beginning Point Pattern Analysis
+Within this section we will be implementing numerous techniques to check for any form of clustering within our data points. Here we will be utilizing point pattern analysis as a metric of finding clustering, and we will be utilizing the Kolmogorov-Smirnov test as another method of determining if there are clusters.
+
+## Beginning Point Pattern Analysis
 
 ```{r}
 coords <- SpatialPoints(cleaned.crime.data[,c("Longitude","Latitude")])
 crime_spatial_df <-SpatialPointsDataFrame(coords,cleaned.crime.data)
 proj4string(crime_spatial_df) <- CRS("+proj=longlat +ellps=WGS84")
-#str(crime_spatial_df)
+str(crime_spatial_df)
 ```
 
 By utilizing the SpatialPoints we are able to see a data frame with 5 slots/components including:
@@ -190,13 +193,15 @@ bbox: This is the bounding box of the cordinates, and
 proj4string: THis is the Coordinate Reference System. (places our data in longitude and latitude format)
 
 ```{r}
-saveRDS(crime_spatial_df, "C:/Users/Ron III/Documents/Crime_Research/crime_spatial_df.rds")
+saveRDS(crime_spatial_df, "C:/Users/Ron III/Documents/GitHub/Chicago_Crime_Evolution_Analysis/crime_spatial_df.rds")
+
+
 ```
 
 
 ```{r}
-unzip("C:/Users/Ron III/Documents/Crime_Research/Data_Set_Files/Boundaries - ZIP Codes.zip", exdir = "C:/Users/Ron III/Documents/Crime_Research/shapefiles_1", overwrite = TRUE)
-illinois_shp <- readOGR(dsn = "C:/Users/Ron III/Documents/Crime_Research/shapefiles_1",layer = "geo_export_6c977322-0a01-4386-849c-278ec22209fe" )
+unzip("C:/Users/Ron III/Documents/GitHub/Chicago_Crime_Evolution_Analysis/Data_Sets_Files/Boundaries - ZIP Codes.zip", exdir = "C:/Users/Ron III/Documents/Crime_Research/shapefiles_1", overwrite = TRUE)
+illinois_shp <- readOGR(dsn = "C:/Users/Ron III/Documents/GitHub/Chicago_Crime_Evolution_Analysis/shapefiles_1",layer = "geo_export_6c977322-0a01-4386-849c-278ec22209fe" )
 
 # 
 # plot(crime_spatial_df,pch="+",cex=0.5,main="",col=crime_spatial_df$Primary.Type)
@@ -221,7 +226,7 @@ crime_ppp <- ppp(lon,lat,xrange,yrange,marks = as.factor(cleaned.crime.data$Prim
 plot(crime_ppp, main = "Our Crime PPP Object")
 ```
 
-## Creating Quadrats and plot intensity using Spatstat
+### Creating Quadrats and plot intensity using Spatstat
 
 ```{r}
 q <- quadratcount(crime_ppp, nx = 7, ny = 3)
@@ -229,7 +234,7 @@ plot(crime_ppp, cex = 0.5, pch = "+")
 plot(q, add=T, cex=2, main = "Groovy quadrat plot")
 ```
 
-## Representing Crime denisty in Chicago
+### Representing Crime denisty in Chicago
 ```{r}
 ds <- density(crime_ppp)
 plot(ds, main = "Crime density")
@@ -239,9 +244,9 @@ plot(ds, main = "Crime density")
 
 Here we are testing assumptions of our spatial distribution of our data point as being complete spatial randomness (CSR). The purpose of this is to find if our data points are clustered in space.
 ```{r}
-# quadrat.test(crime_ppp, nx = 10, ny = 15)
-# ks <- cdf.test(crime_ppp, "x")
-# plot(ks)
+quadrat.test(crime_ppp, nx = 10, ny = 15)
+ks <- cdf.test(crime_ppp, "x")
+plot(ks)
 ```
 
 ```{r}
@@ -250,9 +255,9 @@ pval
 ```
 
 ```{r}
-# ds <- density(crime_ppp)
-# k <- cdf.test(crime_ppp, ds)
-# plot(k)
+ds <- density(crime_ppp)
+k <- cdf.test(crime_ppp, ds)
+plot(k)
 ```
 
 Based on our Kolmogorov-Smirnov test of CSR we have found that our crime data was not from a population distributed by the standards of CSR. This is show in our presented plot above where if our data did follow the assumptions of CSR our cumulative distributions would be different.
@@ -279,6 +284,127 @@ ktest <- Kest(crime_ppp)
 ktest
 plot(ktest)
 ```
+
+```{r}
+#First plot the points
+plot(crime_ppp,pch=16,cex=0.5, main="Blue Plaques in Harrow")
+#now count the points in that fall in a 6 x 6 grid overlaid across the window
+plot(quadratcount(crime_ppp, nx = 6, ny = 6),add=T,col="red") 
+```
+
+
+```{r}
+Qcount<-data.frame(quadratcount(crime_ppp, nx = 6, ny = 6))
+#put the results into a data frame
+QCountTable <- data.frame(table(Qcount$Freq, exclude=NULL))
+#view the data frame
+QCountTable
+```
+
+
+```{r}
+#we don't need the last row, so remove it
+QCountTable <- QCountTable[-nrow(QCountTable),]
+#check the data type in the first column - if it is factor, we will need to convert it to numeric
+class(QCountTable[,1])
+#oops, looks like it's a factor, so we need to convert it to numeric
+QCountTable[,1]<- as.numeric((QCountTable[,1]))
+#calculate the total blue plaques (Var * Freq)
+QCountTable$total <- QCountTable[,1]*QCountTable[,2]
+#calculate mean
+sums <- colSums(QCountTable[,-1])
+sums
+```
+
+
+```{r}
+#and now calculate our mean Poisson parameter (lambda)
+lambda <- sums[2]/sums[1]
+#calculate expected using the Poisson formula from above - k is the number of blue plaques counted in a square and is found in the first column of our table...
+QCountTable$Pr <- ((lambda^QCountTable[,1])*exp(-lambda))/factorial(QCountTable[,1])
+#now calculate the expected counts and save them to the table
+QCountTable$Expected <- round(QCountTable$Pr * sums[1],0)
+QCountTable
+```
+
+
+```{r}
+#Compare the frequency distributions of the observed and expected point patterns
+plot(c(1,5),c(0,14), type="n", xlab="Number of Blue Plaques (Red=Observed, Blue=Expected)", ylab="Frequency of Occurances")
+points(QCountTable$Freq, col="Red", type="o", lwd=3)
+points(QCountTable$Expected, col="Blue", type="o", lwd=3)
+```
+
+```{r}
+teststats <- quadrat.test(crime_ppp, nx = 6, ny = 6)
+teststats
+```
+
+```{r}
+plot(crime_ppp,pch=16,cex=0.5, main="Blue Plaques in Harrow")
+plot(teststats, add=T, col = "red")
+```
+
+##  Density-based spatial clustering of applications with noise (DBSCAN)    
+
+```{r}
+library(raster)
+library(fpc)
+library(plyr)
+```
+
+```{r}
+all_pp <- unique(crime_ppp)
+
+#then add the coordinate unit
+unitname(all_pp) <- c("meter","meter")
+summary(all_pp)
+```
+
+```{r}
+#we could subset the point pattern using the marks
+ant_pp <- subset(all_pp,marks=="Tetramorium_caespitum")
+#in that case we do not need the marks any more
+ant_pp <- unmark(ant_pp)
+```
+
+```{r}
+#split based on the species names
+split_pp <- split(all_pp)
+class(split_pp)
+as.matrix(lapply(split_pp,npoints),ncol=1)
+```
+
+```{r}
+w <- hexagon(centre=c(5,5))
+plot(ant_pp[w])
+
+#split based on a window
+split_ant_pp <- split(ant_pp,f=w)
+summary(split_ant_pp)
+```
+
+```{r}
+dens_all <- density(split_pp)
+plot(dens_all)
+```
+
+
+```{r}
+quadrat.test(ant_pp) 
+```
+
+```{r}
+#fit an intercept-only poisson point process model
+m0 <- ppm(all_pp ~ 1)
+m0
+```
+
+```{r}
+m1 <- ppm(ant_pp ~ polynom(x,y,2))
+m1
+```
+
 
 Based on the results of these test we will be able to determine whether or not our data is clustered
 If our data happens to be clustered then we will take it to be clustering on the different types of crimes that can occur and or if possible connect the clustering to those of gang activities to relate crimes committed by gangs to crime in chicago and quantify relationship through Hierarchical Based Crime Series Linkage.
