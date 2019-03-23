@@ -1,0 +1,86 @@
+---
+title: "Chicago-Crime-Analysis"
+author: "Ronald Washington III"
+date: "March 12, 2019"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r include=FALSE}
+library(dplyr)
+library(readr)
+library(ggplot2) 
+library(knitr)
+library(sf)
+library(sp)
+library(raster)
+library(rgdal)
+library(RCurl)
+library(shapefiles)
+library(maptools)
+```
+
+## Reading in Data
+```{r include=FALSE}
+# Load Chicago Crimes 2016-2018 CSV
+original_Jan2016_Feb2017<-read_csv("C:/Users/Ron III/Documents/Crime_Research/Data_Set_Files/01 JAN 2016 TO 16 JAN 2018/01-JAN-2016 to 28-FEB-2017 - ISR - JUV Redacted.csv")
+original_Feb2017_Jan2018<-read_csv("C:/Users/Ron III/Documents/Crime_Research/Data_Set_Files/01 JAN 2016 TO 16 JAN 2018/29-FEB-2017 thru 16-JAN-2018 - ISR - JUV Redacted.csv")
+
+```
+
+## Cleaning data and choosing columns
+
+```{r}
+
+# Removal of all Junvial cases
+
+#column(cleaned_Jan2016_Feb2017)
+cleaned_Jan2016_Feb2017 <- original_Jan2016_Feb2017 %>% filter(!((CONTACT_CARD_ID=="REDACTED") ))
+cleaned_Jan2016_Feb2017["RD_NO"] <- NULL
+cleaned_Feb2017_Jan2018 <- original_Feb2017_Jan2018 %>% filter(!((CONTACT_CARD_ID=="REDACTED") ))
+
+#setdiff(names(cleaned_Jan2016_Feb2017), names(cleaned_Feb2017_Jan2018))
+
+# Combining data sets
+combined_crimes <- rbind(cleaned_Jan2016_Feb2017, cleaned_Feb2017_Jan2018[, names(cleaned_Jan2016_Feb2017)])
+combined_crimes_gang_only <-combined_crimes[!is.na(combined_crimes$NAME),]
+arr_combined_crimes_gang_only <- combined_crimes_gang_only %>% filter(((ENFORCEMENT_TYPE_CD=="ARR") ))
+```
+
+```{r}
+reduced_arr_crime_data = subset(arr_combined_crimes_gang_only, select = c(CONTACT_DATE,CREATED_DATE,MODIFIED_DATE,AGE,SEX_CODE_CD,RACE_CODE_CD,COMPLEXION_CODE_CD,
+STREET_NO,STREET_DIRECTION_CD,STREET_NME,APT_NO,CITY,STATE_CD,ZIP_CD,DISTRICT,SECTOR,BEAT,WARD,GANG,FACTION_NAME,ENFORCEMENT_ACTION_TAKEN_I,INDICATIVE_DRUG_TRANSACTION_I,GANG_NARCOTIC_RELATED_I,VERBAL_THREATS_I,
+ACTIONS_INDICATIVE_VIOLENCE_I,VIOLENT_CRIME_I,WEAPON_OR_CONTRABAND_FOUND_I,FIREARM_I,COCAINE_I,
+HEROIN_I,OTHER_CONTRABAND_I,CANNABIS_I,GANG_OTHER_I,CITED_VIOLATIONS_CD,ENFORCEMENT_ID_NO,ALCOHOL_I,S_PARA_I,GANG_OTHER,NAME) )
+
+write.csv(reduced_arr_crime_data,"reduced_arr_crime_data.csv") 
+```
+
+```{r}
+grp <- group_by(reduced_arr_crime_data, reduced_arr_crime_data$NAME)
+summarise(grp, mean=length(GANG_NARCOTIC_RELATED_I))
+```
+
+
+```{r include=FALSE}
+# Load Chicago ZipCode shapefile
+border <- read_sf('C:/Users/Ron III/Documents/Crime_Research/Data_Set_Files/Boundaries - ZIP Codes/geo_export_6c977322-0a01-4386-849c-278ec22209fe.shp')
+border['City']='CHICAGO'
+
+Connections <- border[paste(border$City) == "CHICAGO", ]
+projection(reduced_arr_crime_data) = projection(border)
+overlay<-over(reduced_arr_crime_data,Connections)
+reduced_arr_crime_data_connection <- reduced_arr_crime_data[!is.na(reduced_arr_crime_data$over),] 
+
+```
+
+```{r}
+ggplot() + 
+  geom_sf(data = border, size = 1, color = "black", fill = "cyan1") + 
+  ggtitle("Chicago Boundary Plot") + 
+  coord_sf()
+```
+

@@ -1,0 +1,167 @@
+---
+title: "GeoSpatial Chicago Crime Analysis 2001-Present"
+author: "Ronald Washington III"
+date: "March 13, 2019"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Importing Libraries
+
+```{r}
+library(dplyr)
+library(readr)
+library(ggplot2) 
+library(ggrepel)
+library(knitr)
+library(chron)
+library(scales)
+# library(sf)
+# library(sp)
+# library(raster)
+# library(rgdal)
+# library(RCurl)
+# library(shapefiles)
+# library(maptools)
+```
+
+
+```{r}
+crime.data <- read.csv("https://data.cityofchicago.org/api/views/ijzp-q8t2/rows.csv?accessType=DOWNLOAD",nrows = 50000)
+```
+
+# Cleaning of data
+
+```{r}
+cleaned.crime.data <- subset(crime.data, !duplicated(crime.data$Case.Number)) #Removal of duplicates
+cleaned.crime.data <- cleaned.crime.data %>% filter(Arrest=="true") #Limiting to only arrests 
+cleaned.crime.data$Date <- as.POSIXct(cleaned.crime.data$Date,format=" %m/%d/%Y %H:%M") #readable date format
+cleaned.crime.data$Time <- times(format(cleaned.crime.data$Date," %H:%M:%S")) #inclusion of time column
+
+# Separating into time chucks for time analysis which will aid in seasonal analysis
+Time.tag <- chron(times= c("00:00:00", "06:00:00", "12:00:00", "18:00:00","23:59:00"))
+cleaned.crime.data$Time.tag <- cut(cleaned.crime.data$Time, breaks=Time.tag,labels=c("00-06","06-12", "12-18", "18-00"), include.lowest=TRUE)
+cleaned.crime.data$Date <- as.POSIXct(strptime(cleaned.crime.data$Date,format= " %Y-%m-%d"))#readable date format / without time
+
+# Removal of NAs found within Longitude and Latitutde
+cleaned.crime.data <- subset(cleaned.crime.data, !is.na(cleaned.crime.data$Latitude))
+```
+
+## Reducing the number of crime types/descriptions
+### Number of Different types of Crime type
+
+```{r}
+length(table(cleaned.crime.data$Primary.Type)) # 30 found
+
+(table(cleaned.crime.data$Primary.Type)) #occurances of each
+```
+
+### Creating classifications for crime types
+
+```{r}
+cleaned.crime.data$crime <- as.character(cleaned.crime.data$Primary.Type)
+
+cleaned.crime.data$crime <- ifelse(cleaned.crime.data$crime %in% c("CRIM SEXUAL ASSAULT","PROSTITUTION", "SEX OFFENSE"), "SEXUAL", cleaned.crime.data$crime)
+
+cleaned.crime.data$crime <- ifelse(cleaned.crime.data$crime %in% c("MOTOR VEHICLE THEFT"),"VEHICLE", cleaned.crime.data$crime)
+
+cleaned.crime.data$crime <- ifelse(cleaned.crime.data$crime %in% c("GAMBLING", "INTERFERE WITH PUBLIC OFFICER","INTERFERENCE WITH PUBLIC OFFICER" ,"INTIMIDATION",
+                                                     "LIQUOR LAW VIOLATION",  "OBSCENITY" , "NON-CRIMINAL","PUBLIC PEACE VIOLATION", "PUBLIC INDECENCY", 
+                                                     "STALKING" ,  "NON-CRIMINAL (SUBJECT SPECIFIED)" ), "NON-VIOLATION", cleaned.crime.data$crime)
+
+cleaned.crime.data$crime <- ifelse(cleaned.crime.data$crime == "CRIMINAL DAMAGE", "DAMAGE",cleaned.crime.data$crime)
+
+cleaned.crime.data$crime <- ifelse(cleaned.crime.data$crime == "CRIMINAL TRESPASS","TRESPASS", cleaned.crime.data$crime)
+
+cleaned.crime.data$crime <- ifelse(cleaned.crime.data$crime %in% c("NARCOTICS","OTHER NARCOTIC VIOLATION","OTHER NARCOTIC VIOLATION"),
+                                   "DRUG", cleaned.crime.data$crime)
+
+cleaned.crime.data$crime <- ifelse(cleaned.crime.data$crime ==  "DECEPTIVE PRACTICE","FRAUD", cleaned.crime.data$crime)
+
+cleaned.crime.data$crime <- ifelse(cleaned.crime.data$crime %in% c("OTHER OFFENSE", "OTHER OFFENSE"), "OTHER", cleaned.crime.data$crime)
+
+cleaned.crime.data$crime <- ifelse(cleaned.crime.data$crime %in% c("KIDNAPPING", "WEAPONS VIOLATION", "OFFENSE INVOLVING CHILDREN"), "VIOLATION", cleaned.crime.data$crime)
+```
+
+```{r}
+summary(cleaned.crime.data)
+```
+
+
+
+## Aggregated Data Presenting Top 6 Types of Crimes and Relative Distribution 
+
+```{r}
+huh<- as.data.frame(cleaned.crime.data)
+df_crime_daily <- huh %>%
+  group_by(Date) %>%
+  summarize(count = n()) %>%
+  arrange(Date)
+```
+
+```{r}
+df_category <- sort(table(huh$Primary.Type),decreasing = TRUE)
+df_category <- data.frame(df_category[df_category > 1])
+colnames(df_category) <- c("Category", "Frequency")
+df_category$Percentage <- df_category$Frequency / sum(df_category$Frequency)
+x<-head(df_category)
+x
+```
+
+
+
+```{r}
+df_theft <- huh %>% filter(grepl("ASSAULT", Primary.Type))
+
+df_theft_daily <- df_theft %>%
+  mutate(Date = as.Date(Date, "%m/%d/%Y")) %>%
+  group_by(Date) %>%
+  summarize(count = n()) %>%
+  arrange(Date)
+
+
+plot <- ggplot(df_theft_daily, aes(x = Date, y = count)) +
+  geom_line(color = "#F2CA27", size = 0.1) +
+  geom_smooth(color = "#1A1A1A") +
+  # fte_theme() +
+  scale_x_date(breaks = date_breaks("1 year"), labels = date_format("%Y")) +
+  labs(x = "Date of Theft", y = "Number of NARCOTICS", title = "Daily NARCOTICS in San Francisco from ")
+plot
+```
+
+### CREATE FUNCTION TO SHOW THE TRENDS OF THE TOP 6 CRIME TYPES
+
+### CREATE HEATMAPS/CORRELATION MATRIXS SHOWING RELATIONSHIPS OF SEASONS
+
+## Map showing crime in chicago
+
+```{r}
+library(leaflet)
+data <- huh[1:10000,] # display the first 10,000 rows
+data$popup <- paste("<b>Incident #: </b>", data$Case.Number, "<br>", "<b>Category: </b>", data$Primary.Type,
+                    "<br>", "<b>Description: </b>", data$Description,
+                    "<br>", "<b>Location Description: </b>", data$Location.Description,
+                    "<br>", "<b>Community Area: </b>", data$Community.Area,
+                    "<br>", "<b>Time: </b>", data$Time,
+                    "<br>", "<b>Time: </b>", data$Year,
+                    "<br>", "<b>Crime Type: </b>", data$crime,
+                    "<br>", "<b>Longitude: </b>", data$Longitude,
+                    "<br>", "<b>Latitude: </b>", data$Latitude)
+
+leaflet(data, width = "100%") %>% addTiles() %>%
+  addTiles(group = "OSM (default)") %>%
+  addProviderTiles(provider = "Esri.WorldStreetMap",group = "World StreetMap") %>%
+  addProviderTiles(provider = "Esri.WorldImagery",group = "World Imagery") %>%
+  # addProviderTiles(provider = "NASAGIBS.ViirsEarthAtNight2012",group = "Nighttime Imagery") %>%
+  addMarkers(lng = ~Longitude, lat = ~Latitude, popup = data$popup, clusterOptions = markerClusterOptions()) %>%
+  addLayersControl(
+    baseGroups = c("OSM (default)","World StreetMap", "World Imagery"),
+    options = layersControlOptions(collapsed = FALSE)
+  )
+```
+

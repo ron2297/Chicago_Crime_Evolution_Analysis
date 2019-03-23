@@ -1,0 +1,284 @@
+---
+title: "test_file_geostat"
+author: "Ronald Washington III"
+date: "March 19, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Importing Libraries
+
+```{r}
+library(dplyr)
+library(readr)
+library(ggplot2) 
+library(ggrepel)
+library(knitr)
+library(chron)
+library(scales)
+library(rgdal)
+library(rgeos)
+library(sf)
+library(sp)
+library(raster)
+library(RCurl)
+library(shapefiles)
+library(maptools)
+library(spatstat)
+library(xts)
+library(highcharter)
+```
+
+# Reading in Data
+
+```{r}
+crime.data <- read.csv("https://data.cityofchicago.org/api/views/ijzp-q8t2/rows.csv?accessType=DOWNLOAD",nrows = 50000)
+```
+
+# Cleaning of data
+
+```{r}
+cleaned.crime.data <- subset(crime.data, !duplicated(crime.data$Case.Number)) #Removal of duplicates
+#cleaned.crime.data <- cleaned.crime.data %>% filter(Arrest=="true") #Limiting to only arrests 
+cleaned.crime.data$Date <- as.POSIXct(cleaned.crime.data$Date,format=" %m/%d/%Y %H:%M") #readable date format
+cleaned.crime.data$Time <- times(format(cleaned.crime.data$Date," %H:%M:%S")) #inclusion of time column
+
+# Separating into time chucks for time analysis which will aid in seasonal analysis
+Time.tag <- chron(times= c("00:00:00", "06:00:00", "12:00:00", "18:00:00","23:59:00"))
+cleaned.crime.data$Time.tag <- cut(cleaned.crime.data$Time, breaks=Time.tag,labels=c("00-06","06-12", "12-18", "18-00"), include.lowest=TRUE)
+cleaned.crime.data$Date <- as.POSIXct(strptime(cleaned.crime.data$Date,format= " %Y-%m-%d"))#readable date format / without time
+
+# Removal of NAs found within Longitude and Latitutde and Date
+cleaned.crime.data <- subset(cleaned.crime.data, !is.na(cleaned.crime.data$Latitude))
+cleaned.crime.data <- subset(cleaned.crime.data, !is.na(cleaned.crime.data$Date))
+```
+
+## Reducing the number of crime types/descriptions
+### Number of Different types of Crime type
+
+```{r}
+length(table(cleaned.crime.data$Primary.Type)) # 30 found
+
+(table(cleaned.crime.data$Primary.Type)) #occurances of each
+```
+
+### Creating classifications for crime types
+
+```{r}
+cleaned.crime.data$crime <- as.character(cleaned.crime.data$Primary.Type)
+
+cleaned.crime.data$crime <- ifelse(cleaned.crime.data$crime %in% c("CRIM SEXUAL ASSAULT","PROSTITUTION", "SEX OFFENSE"), "SEXUAL", cleaned.crime.data$crime)
+
+cleaned.crime.data$crime <- ifelse(cleaned.crime.data$crime %in% c("MOTOR VEHICLE THEFT"),"VEHICLE", cleaned.crime.data$crime)
+
+cleaned.crime.data$crime <- ifelse(cleaned.crime.data$crime %in% c("GAMBLING", "INTERFERE WITH PUBLIC OFFICER","INTERFERENCE WITH PUBLIC OFFICER" ,"INTIMIDATION",
+                                                     "LIQUOR LAW VIOLATION",  "OBSCENITY" , "NON-CRIMINAL","PUBLIC PEACE VIOLATION", "PUBLIC INDECENCY", 
+                                                     "STALKING" ,  "NON-CRIMINAL (SUBJECT SPECIFIED)" ), "NON-VIOLATION", cleaned.crime.data$crime)
+
+cleaned.crime.data$crime <- ifelse(cleaned.crime.data$crime == "CRIMINAL DAMAGE", "DAMAGE",cleaned.crime.data$crime)
+
+cleaned.crime.data$crime <- ifelse(cleaned.crime.data$crime == "CRIMINAL TRESPASS","TRESPASS", cleaned.crime.data$crime)
+
+cleaned.crime.data$crime <- ifelse(cleaned.crime.data$crime %in% c("NARCOTICS","OTHER NARCOTIC VIOLATION","OTHER NARCOTIC VIOLATION"),
+                                   "DRUG", cleaned.crime.data$crime)
+
+cleaned.crime.data$crime <- ifelse(cleaned.crime.data$crime ==  "DECEPTIVE PRACTICE","FRAUD", cleaned.crime.data$crime)
+
+cleaned.crime.data$crime <- ifelse(cleaned.crime.data$crime %in% c("OTHER OFFENSE", "OTHER OFFENSE"), "OTHER", cleaned.crime.data$crime)
+
+cleaned.crime.data$crime <- ifelse(cleaned.crime.data$crime %in% c("KIDNAPPING", "WEAPONS VIOLATION", "OFFENSE INVOLVING CHILDREN"), "VIOLATION", cleaned.crime.data$crime)
+```
+
+# Data Exploration
+
+## Aggregated Data Presenting Top 6 Types of Crimes and Relative Distribution 
+
+```{r}
+huh<- as.data.frame(cleaned.crime.data)
+df_crime_daily <- huh %>%
+  group_by(Date) %>%
+  summarize(count = n()) %>%
+  arrange(Date)
+```
+
+```{r}
+df_category <- sort(table(huh$Primary.Type),decreasing = TRUE)
+df_category <- data.frame(df_category[df_category > 1])
+colnames(df_category) <- c("Category", "Frequency")
+df_category$Percentage <- df_category$Frequency / sum(df_category$Frequency)
+x<-head(df_category)
+x
+```
+
+## Map showing crime in chicago
+
+```{r}
+library(leaflet)
+data <- huh 
+data$popup <- paste("<b>Incident #: </b>", data$Case.Number, "<br>", "<b>Category: </b>", data$Primary.Type,
+                    "<br>", "<b>Description: </b>", data$Description,
+                    "<br>", "<b>Location Description: </b>", data$Location.Description,
+                    "<br>", "<b>Community Area: </b>", data$Community.Area,
+                    "<br>", "<b>Time: </b>", data$Time,
+                    "<br>", "<b>Time: </b>", data$Year,
+                    "<br>", "<b>Crime Type: </b>", data$crime,
+                    "<br>", "<b>Longitude: </b>", data$Longitude,
+                    "<br>", "<b>Latitude: </b>", data$Latitude)
+
+leaflet(data, width = "100%") %>% addTiles() %>%
+  addTiles(group = "OSM (default)") %>%
+  addProviderTiles(provider = "Esri.WorldStreetMap",group = "World StreetMap") %>%
+  addProviderTiles(provider = "Esri.WorldImagery",group = "World Imagery") %>%
+  # addProviderTiles(provider = "NASAGIBS.ViirsEarthAtNight2012",group = "Nighttime Imagery") %>%
+  addMarkers(lng = ~Longitude, lat = ~Latitude, popup = data$popup, clusterOptions = markerClusterOptions()) %>%
+  addLayersControl(
+    baseGroups = c("OSM (default)","World StreetMap", "World Imagery"),
+    options = layersControlOptions(collapsed = FALSE)
+  )
+```
+# Visualization of Crimes and Arrest Relationship
+
+```{r}
+
+
+cleaned.crime.data$crime <- as.factor(cleaned.crime.data$crime)
+
+by_Date <- cleaned.crime.data %>% group_by(Date) %>% summarise(Total = n())
+tseries <- xts(by_Date$Total, order.by=as.POSIXct(by_Date$Date))
+
+Arrests_by_Date$Date[!(Arrests_by_Date$Date %in% by_Date$Date)]
+## Creating timeseries of arrests made
+Arrests_by_Date <- (cleaned.crime.data[cleaned.crime.data$Arrest == 'true',]) %>% group_by(Date) %>% summarise(Total = n())
+arrests_tseries <- xts(Arrests_by_Date$Total, order.by=as.POSIXct(Arrests_by_Date$Date))
+
+
+hchart(tseries, name = "crime") %>% 
+ hc_add_series(arrests_tseries, name = "Arrest") %>%
+ hc_add_theme(hc_theme_monokai()) %>%
+ hc_credits(enabled = TRUE, text = "Sources: City of Chicago Administration and the Chicago Police Department", style = list(fontSize = "12px")) %>%
+ hc_title(text = "Trend of Chicago Crimes and Arrests") %>%
+ hc_legend(enabled = TRUE)
+```
+
+```{r}
+# %-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0
+# %-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0
+# %-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0
+# %-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0
+# %-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0
+# %-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0
+```
+
+
+# Beginning Point Pattern Analysis
+
+```{r}
+coords <- SpatialPoints(cleaned.crime.data[,c("Longitude","Latitude")])
+crime_spatial_df <-SpatialPointsDataFrame(coords,cleaned.crime.data)
+proj4string(crime_spatial_df) <- CRS("+proj=longlat +ellps=WGS84")
+#str(crime_spatial_df)
+```
+
+By utilizing the SpatialPoints we are able to see a data frame with 5 slots/components including:
+data: the origin data read into R
+coords.nrs: The data type of the coordinates
+coords: these are the coordinates
+bbox: This is the bounding box of the cordinates, and 
+proj4string: THis is the Coordinate Reference System. (places our data in longitude and latitude format)
+
+```{r}
+saveRDS(crime_spatial_df, "C:/Users/Ron III/Documents/Crime_Research/crime_spatial_df.rds")
+```
+
+
+```{r}
+unzip("C:/Users/Ron III/Documents/Crime_Research/Data_Set_Files/Boundaries - ZIP Codes.zip", exdir = "C:/Users/Ron III/Documents/Crime_Research/shapefiles_1", overwrite = TRUE)
+illinois_shp <- readOGR(dsn = "C:/Users/Ron III/Documents/Crime_Research/shapefiles_1",layer = "geo_export_6c977322-0a01-4386-849c-278ec22209fe" )
+
+# 
+# plot(crime_spatial_df,pch="+",cex=0.5,main="",col=crime_spatial_df$Primary.Type)
+# plot(illinois_shp,add=T)
+# legend(x=-0.53,y=51.41,pch="+",col=unique(crime_spatial_df$Primary.Type),legend=unique(crime_spatial_df$))
+
+```
+
+
+
+
+```{r}
+lon <- cleaned.crime.data$Longitude
+lat <- cleaned.crime.data$Latitude
+xrange <- range(lon,na.rm = T)
+yrange <- range(lat,na.rm = T)
+crime_ppp <- ppp(lon,lat,xrange,yrange,marks = as.factor(cleaned.crime.data$Primary.Type))
+```
+
+
+```{r}
+plot(crime_ppp, main = "Our Crime PPP Object")
+```
+
+## Creating Quadrats and plot intensity using Spatstat
+
+```{r}
+q <- quadratcount(crime_ppp, nx = 7, ny = 3)
+plot(crime_ppp, cex = 0.5, pch = "+")
+plot(q, add=T, cex=2, main = "Groovy quadrat plot")
+```
+
+## Representing Crime denisty in Chicago
+```{r}
+ds <- density(crime_ppp)
+plot(ds, main = "Crime density")
+```
+
+## Kolmogorov-Smirnov test of CSR
+
+Here we are testing assumptions of our spatial distribution of our data point as being complete spatial randomness (CSR). The purpose of this is to find if our data points are clustered in space.
+```{r}
+# quadrat.test(crime_ppp, nx = 10, ny = 15)
+# ks <- cdf.test(crime_ppp, "x")
+# plot(ks)
+```
+
+```{r}
+pval <- ks$p.value
+pval
+```
+
+```{r}
+# ds <- density(crime_ppp)
+# k <- cdf.test(crime_ppp, ds)
+# plot(k)
+```
+
+Based on our Kolmogorov-Smirnov test of CSR we have found that our crime data was not from a population distributed by the standards of CSR. This is show in our presented plot above where if our data did follow the assumptions of CSR our cumulative distributions would be different.
+
+### G function: Distance to the nearest event
+```{r}
+gtest <- Gest(crime_ppp)
+gtest
+plot(gtest)
+```
+
+### F function: Distance from a point to the nearest event
+
+```{r}
+ftest <- Fest(crime_ppp)
+ftest
+plot(ftest)
+```
+
+### K function: Points witin a certain distance of a point
+
+```{r}
+ktest <- Kest(crime_ppp)
+ktest
+plot(ktest)
+```
+
+Based on the results of these test we will be able to determine whether or not our data is clustered
+If our data happens to be clustered then we will take it to be clustering on the different types of crimes that can occur and or if possible connect the clustering to those of gang activities to relate crimes committed by gangs to crime in chicago and quantify relationship through Hierarchical Based Crime Series Linkage.
