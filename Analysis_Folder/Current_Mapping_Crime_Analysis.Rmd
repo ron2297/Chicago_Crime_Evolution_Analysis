@@ -1,0 +1,392 @@
+---
+title: "new_crime_file"
+author: "Ronald Washington III"
+date: "March 19, 2019"
+output: html_document
+---
+
+
+```{r setup, include =FALSE}
+
+knitr::opts_chunk$set(echo = TRUE) 
+```
+
+
+```{r}
+#  Comments by Ronald Washington III ----------------------------------------------------------------
+# The code below was developing as a Senior Research project for DA 401 ("Seminar in Data Analytics")
+# at Denison University. I was inspired to conduct research regarding my home-city Chicago, IL and 
+# perform some investigatory analysis on the evolution of crime within the city from 2001-present day.
+# The data utlized within my research was provided by the Chicago Police Department, and can be found
+# at (https://data.cityofchicago.org/Public-Safety/Crimes-2001-to-present/ijzp-q8t2). This data includes
+# information regarding important information such as date, type of crime, crime code, description, arrest 
+# identification, police district, longitude and latitude, and etc. As I began my analysis for this project
+# I gathered inspiration for my analysis from numerous other researcher that investigated crime in other 
+# cities such as Baltimore, LA, New York, and San Francisco. (Each of these references will be listed below).
+# From this investigation I intend to discover the distributions of various crimes occuring within Chicago, 
+# and hopfully be able to map out each crime type. From there I wish to perform clustering and classification 
+# methods to predict the types of crimes that can occur in the future. Furthermore, I am particularly interested
+# in being able to recognize patterns of crime that occur in the city and potentially being able to identify 
+# gang activtiy and its evolution in influencing Chicago Crime.
+#
+# STATE THE DATA SET USED TO IDENTIFY GANG ACTIVITY
+#
+# My primary objectives for the project were to (1) explore the data, (2) perform descriptive analysis and 
+# various forms of clustering and classifying of crime, and (3) and ultimately visualization. 
+#
+# Ronald Washington III (GitHub: https://github.com/ron2297)
+
+# File Descriptions -----------------------------------------------------------------------------------
+#
+# Crime Crime Data for 2001 through Present Day (2019) downloaded from Chicago Data Portal
+# at (https://data.cityofchicago.org/Public-Safety/Crimes-2001-to-present/ijzp-q8t2) (n = 6823075)
+```
+
+# Importing Libraries
+```{r include=FALSE}
+library(dplyr)
+library(readr)
+library(knitr)
+library(ggforce)
+library(ggplot2) 
+library(ggrepel)
+library(ggExtra)
+library(ggmap)
+library(ggthemes)
+library(ggforce)
+library(chron)
+library(scales)
+library(tidyr)
+library(xts) 
+library(lubridate)
+library(highcharter)
+library(treemap)
+```
+
+
+
+
+# Reading in Data
+```{r eval=FALSE, include=FALSE}
+#crime.data <- read.csv("C:/Users/Ron III/Desktop/Crimes_-_2001_to_present.csv") #,nrows = 500000)
+crime.data <- read.csv(("C:/Users/Bloody Dachi/Documents/Crimes_-_2001_to_present (1).csv"))
+#crime.data <- read.csv("https://data.cityofchicago.org/api/views/ijzp-q8t2/rows.csv?accessType=DOWNLOAD",nrows = 50000)
+```
+
+
+
+# Pre-processing - Cleaning of Crime Data
+
+```{r eval=FALSE, include=FALSE}
+df_Crime <- subset(crime.data, !duplicated(crime.data$Case.Number)) #Removal of duplicates
+#Removing Unneeded Columns
+df_Crime <- subset(df_Crime, select = -c(Case.Number,Description,Domestic,Beat,Ward,Community.Area,FBI.Code,X.Coordinate,Y.Coordinate))
+#df_Crime <- df_Crime %>% filter(Arrest=="true") #Limiting to only arrests 
+df_Crime$Date <- as.POSIXct(df_Crime$Date,format=" %m/%d/%Y %H:%M") #readable date format
+df_Crime$Time <- times(format(df_Crime$Date," %H:%M:%S")) #inclusion of time column
+df_Crime$DayOfWeek <-wday(as.Date(df_Crime$Date,'%m/%d/%Y'), label=TRUE)
+df_Crime$Month <-months(as.Date(df_Crime$Date,'%m/%d/%Y'))
+
+#as.POSIXct(df_Crime$Date,format=" %m/%d/%Y %H:%M") #readable date format
+# Separating into time chucks for time analysis which will aid in seasonal analysis
+Time.tag <- chron(times= c("00:00:00", "06:00:00", "12:00:00", "18:00:00","23:59:00"))
+df_Crime$Time.tag <- cut(df_Crime$Time, breaks=Time.tag,labels=c("00-06","06-12", "12-18", "18-00"), include.lowest=TRUE)
+df_Crime$Date <- as.POSIXct(strptime(df_Crime$Date,format= " %Y-%m-%d"))#readable date format / without time
+
+# Removal of NAs found within Longitude and Latitutde and Date
+df_Crime <- subset(df_Crime, !is.na(df_Crime$Latitude))
+df_Crime <- subset(df_Crime, !is.na(df_Crime$Date))
+```
+
+
+
+
+## Reducing the number of crime types/descriptions
+### Number of Different types of Crime type
+
+```{r eval=FALSE, include=FALSE}
+length(table(df_Crime$Primary.Type)) # 30 found
+
+(table(df_Crime$Primary.Type)) #occurances of each
+```
+
+
+### Creating classifications for crime types
+
+```{r eval=FALSE, include=FALSE}
+df_Crime$crime <- as.character(df_Crime$Primary.Type)
+
+df_Crime$crime <- ifelse(df_Crime$crime %in% c("CRIM SEXUAL ASSAULT","PROSTITUTION", "SEX OFFENSE"), "SEXUAL", df_Crime$crime)
+
+df_Crime$crime <- ifelse(df_Crime$crime %in% c("MOTOR VEHICLE THEFT"),"VEHICLE", df_Crime$crime)
+
+df_Crime$crime <- ifelse(df_Crime$crime %in% c("GAMBLING", "INTERFERE WITH PUBLIC OFFICER","INTERFERENCE WITH PUBLIC OFFICER" ,"INTIMIDATION",
+                                                     "LIQUOR LAW VIOLATION",  "OBSCENITY" , "NON-CRIMINAL","PUBLIC PEACE VIOLATION", "PUBLIC INDECENCY", 
+                                                     "STALKING" ,  "NON-CRIMINAL (SUBJECT SPECIFIED)" ), "NON-VIOLATION", df_Crime$crime)
+
+df_Crime$crime <- ifelse(df_Crime$crime == "CRIMINAL DAMAGE", "DAMAGE",df_Crime$crime)
+
+df_Crime$crime <- ifelse(df_Crime$crime == "CRIMINAL TRESPASS","TRESPASS", df_Crime$crime)
+
+df_Crime$crime <- ifelse(df_Crime$crime %in% c("NARCOTICS","OTHER NARCOTIC VIOLATION","OTHER NARCOTIC VIOLATION"),
+                                   "DRUG", df_Crime$crime)
+
+df_Crime$crime <- ifelse(df_Crime$crime ==  "DECEPTIVE PRACTICE","FRAUD", df_Crime$crime)
+
+df_Crime$crime <- ifelse(df_Crime$crime %in% c("OTHER OFFENSE", "OTHER OFFENSE"), "OTHER", df_Crime$crime)
+
+df_Crime$crime <- ifelse(df_Crime$crime %in% c("KIDNAPPING", "WEAPONS VIOLATION", "OFFENSE INVOLVING CHILDREN"), "VIOLATION", df_Crime$crime)
+```
+
+
+```{r}
+#write.csv(df_Crime, file = "processs_crime_data.csv")
+df_Crime <- read.csv(("C:/Users/Bloody Dachi/Documents/Chicago_Crime_Evolution_Analysis/Analysis_Folder/processs_crime_data.csv"))
+
+
+```
+
+### Removing Outliers from Longitude and Latitude
+
+```{r}
+df_Crime=df_Crime %>% filter(Latitude > 40) 
+df_Crime=df_Crime %>% filter(Longitude > -90) 
+
+#WantedData=df_Crime[df_Crime$Latitude %in% coors$df_Crime.Latitude, ]
+#WantedData=df_Crime[df_Crime$Longitude %in% coors$df_Crime.Longitude, ]
+summary(df_Crime$Longitude)
+```
+
+### Review of Simplified Crime Category Counts
+
+```{r}
+df_Crime <- subset(df_Crime, !is.na(df_Crime$crime))
+(table(df_Crime$crime)) #occurances of each
+```
+
+
+
+# Data Exploration
+
+## Aggregated Data Presenting Top 6 Types of Crimes and Relative Distribution 
+
+```{r}
+huh<- as.data.frame(df_Crime)
+df_crime_daily <- huh %>%
+  group_by(crime,Time.tag,DayOfWeek) %>%
+  summarize(count = n()) %>%
+  mutate(norm = count/sum(count)) %>%
+  arrange(crime)
+```
+
+
+
+```{r}
+df_category <- sort(table(huh$crime),decreasing = TRUE)
+df_category <- data.frame(df_category[df_category > 1])
+colnames(df_category) <- c("Category", "Frequency")
+df_category$Percentage <- df_category$Frequency / sum(df_category$Frequency)
+x<-head(df_category)
+x #gathers top 6
+```
+
+
+
+# Visualization of Crimes and Arrest Relationship
+
+```{r}
+df_Crime$crime <- as.factor(df_Crime$crime)
+
+by_Date <- df_Crime %>% group_by(Date) %>% summarise(Total = n())
+tseries <- xts(by_Date$Total, order.by=as.POSIXct(by_Date$Date))
+
+#Arrests_by_Date$Date[!(Arrests_by_Date$Date %in% by_Date$Date)]
+## Creating timeseries of arrests made
+Arrests_by_Date <- (df_Crime[df_Crime$Arrest == 'true',]) %>% group_by(Date) %>% summarise(Total = n())
+arrests_tseries <- xts(Arrests_by_Date$Total, order.by=as.POSIXct(Arrests_by_Date$Date))
+
+
+hchart(tseries, name = "crime") %>% 
+ hc_add_series(arrests_tseries, name = "Arrest") %>%
+ hc_add_theme(hc_theme_monokai()) %>%
+ hc_credits(enabled = TRUE, text = "Sources: City of Chicago Administration and the Chicago Police Department", style = list(fontSize = "12px")) %>%
+ hc_title(text = "Trend of Chicago Crimes and Arrests") %>% 
+ hc_legend(enabled = TRUE)
+```
+
+
+
+```{r fig.height=10, fig.width=12}
+cat_value_freq <-  
+  df_Crime %>% 
+  select_if(is.factor) %>% 
+  select_if(function(x) !is.ordered(x)) %>% 
+  gather("var", "value") %>% 
+  group_by(var) %>% 
+  count(var, value) %>%
+  mutate(prop = prop.table(n)) %>% 
+  filter(prop > .02)
+
+cat_plot1 <-
+  ggplot(data = cat_value_freq,
+       aes(x = reorder(stringr::str_wrap(value, 20), prop),
+           y = prop)) +
+  geom_bar(stat = "identity", fill = "tomato3") +
+  coord_flip() +
+  facet_wrap(~var,ncol=4, scales = "free") +
+  ggthemes::theme_fivethirtyeight()
+
+cat_plot1
+```
+
+
+```{r}
+# %-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0
+# %-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0
+# %-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0
+# %-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0
+# %-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0
+# %-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0
+```
+
+
+
+
+
+# Mapping Chicago
+
+```{r}
+chicago = get_stamenmap(bbox = c(left = -88.0225, bottom = 41.5949, right = -87.2713, top = 42.0677), maptype = c("toner-lite"), zoom = 13)
+map = ggmap(chicago)
+map
+```
+
+
+
+```{r}
+# #map <- get_map("Chicago", zoom = 12, color = "bw")
+# ggmap(map, extent='device') + 
+#      geom_point(data=sample_n(df_Crime,100000), aes(x=X.Coordinate, y=Y.Coordinate),
+#                 alpha = 1/10,color = "red")+
+#      scale_colour_brewer(type="qual")
+```
+
+
+
+
+```{r}
+chicago <- get_stamenmap(bbox = c(left = -88.0225, bottom = 41.5949, 
+                                  right = -87.2713, top = 42.0677), 
+                         zoom = 10)
+
+ggmap(chicago)
+```
+
+
+
+
+
+
+```{r}
+map_contours <- function(data_trunc, alp) {
+        p1 = ggmap(chicago, extent='device') + 
+        geom_point(data=data_trunc, aes(x=Longitude, y=Latitude), alpha= alp) + 
+        stat_density2d(aes(x=Longitude, y=Latitude,
+                           fill = ..level.., alpha = ..level..),
+                size = 0.1, data = data_trunc, n=100,
+                geom = "polygon") +
+        theme(legend.position="none")
+        return(p1)
+}
+
+
+plot_marginals <- function(data_trunc) {
+        p2 = ggplot(data=data_trunc, aes(x=Longitude, y=Latitude), alpha=0.1)+
+        geom_point()
+        p2 = ggMarginal(p2 + theme_gray(), type = "histogram",
+           fill = "steelblue", col = "darkblue")
+        return(p2)
+}
+```
+
+
+
+
+
+```{r}
+p2 = plot_marginals(sample_n(df_Crime,10000))
+plot(p2)
+```
+
+
+
+```{r}
+p2 = map_contours(sample_n(df_Crime,10000),.1)
+p2
+```
+
+
+# Crime vs Years
+```{r}
+data_plot = df_Crime %>%
+        group_by(Year,Month) %>%
+        summarise(count = n()) 
+ggplot(data = data_plot,aes(group = Month, x=Year, y=count,col = Month)) + 
+  geom_boxplot() + 
+  ylab("Crime count in each month of a year")
+```
+
+
+
+  
+```{r}
+# top10_df <- df_Crime[df_Crime$crime %in% x[,1],]
+# head(top10_df)
+# top10_df
+```
+
+
+
+
+```{r}
+ggmap(chicago, extent='device', legend="topleft") + 
+  geom_point(data = df_Crime[df_Crime$crime %in% x[,1],], aes(x=Longitude, y=Latitude, col = crime), 
+             size = 1.2, alpha = 0.5) + ggtitle("Mapping top 10 crimes")
+```
+
+
+
+
+
+```{r}
+bbox = c(-88.0225,41.5949,-87.2713,42.0677)
+chicago_map <- get_map(location = bbox, source = "stamen", maptype = "toner-lite")
+
+#df_Crime$
+# plot<-ggmap(chicago_map)+
+#   geom_point(data = df_Crime,aes(x=Longitude,y=Latitude), color = "green", size = 0.5, alpha = 0.01)+theme_light()+labs(title = "ass")
+# plot
+```
+
+
+
+#Top 10 is actually Top 6
+
+```{r}
+map_crime <- function(crime_df) {
+  #filtered <- filter(crime_df, Primary.Type %in% crime)
+  plot <- ggmap(chicago_map, extent='device') + 
+          geom_density2d(data = crime_df%>% filter(Primary.Type %in% df_Crime[df_Crime$crime %in% x[,1],]$Primary.Type ) , 
+          aes(x = Longitude, y = Latitude), size = 0.3) + stat_density2d(data = crime_df%>% filter(Primary.Type %in% df_Crime[df_Crime$crime %in% x[,1],]$Primary.Type ) , 
+          aes(x = Longitude, y = Latitude, fill = ..level.., alpha = ..level..), size = 0.01,
+          bins = 16, geom = "polygon") + scale_fill_gradient(low = "green", high = "red", 
+          guide = FALSE) + scale_alpha(range = c(0, 0.3), guide = FALSE)+
+            facet_wrap_paginate(~ crime, ncol = 3,page =1)
+  return(plot)
+}
+#length(unique(WantedData$crime))
+# Display Top 6 Crime Types Desnity Distribution across Chicago
+map_crime(df_Crime[1:1000000,])
+```
+
+

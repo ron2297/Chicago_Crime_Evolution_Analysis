@@ -11,7 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Importing Libraries
 
-```{r}
+```{r include=FALSE}
 library(dplyr)
 library(readr)
 library(ggplot2) 
@@ -35,7 +35,8 @@ library(highcharter)
 # Reading in Data
 
 ```{r}
-crime.data <- read.csv("https://data.cityofchicago.org/api/views/ijzp-q8t2/rows.csv?accessType=DOWNLOAD",nrows = 5000)
+#crime.data <- read.csv(("C:/Users/Bloody Dachi/Documents/Crimes_-_2001_to_present (1).csv"))
+crime.data <- read.csv("https://data.cityofchicago.org/api/views/ijzp-q8t2/rows.csv?accessType=DOWNLOAD",nrows = 50000)
 ```
 
 # Cleaning of data
@@ -92,6 +93,12 @@ cleaned.crime.data$crime <- ifelse(cleaned.crime.data$crime %in% c("OTHER OFFENS
 cleaned.crime.data$crime <- ifelse(cleaned.crime.data$crime %in% c("KIDNAPPING", "WEAPONS VIOLATION", "OFFENSE INVOLVING CHILDREN"), "VIOLATION", cleaned.crime.data$crime)
 ```
 
+```{r}
+cleaned.crime.data <- subset(cleaned.crime.data, !is.na(cleaned.crime.data$crime))
+(table(cleaned.crime.data$crime)) #occurances of each
+```
+
+
 # Data Exploration
 
 ## Aggregated Data Presenting Top 6 Types of Crimes and Relative Distribution 
@@ -105,7 +112,7 @@ df_crime_daily <- huh %>%
 ```
 
 ```{r}
-df_category <- sort(table(huh$Primary.Type),decreasing = TRUE)
+df_category <- sort(table(huh$crime),decreasing = TRUE)
 df_category <- data.frame(df_category[df_category > 1])
 colnames(df_category) <- c("Category", "Frequency")
 df_category$Percentage <- df_category$Frequency / sum(df_category$Frequency)
@@ -116,33 +123,32 @@ x
 ## Map showing crime in chicago
 
 ```{r}
-library(leaflet)
-data <- huh 
-data$popup <- paste("<b>Incident #: </b>", data$Case.Number, "<br>", "<b>Category: </b>", data$Primary.Type,
-                    "<br>", "<b>Description: </b>", data$Description,
-                    "<br>", "<b>Location Description: </b>", data$Location.Description,
-                    "<br>", "<b>Community Area: </b>", data$Community.Area,
-                    "<br>", "<b>Time: </b>", data$Time,
-                    "<br>", "<b>Time: </b>", data$Year,
-                    "<br>", "<b>Crime Type: </b>", data$crime,
-                    "<br>", "<b>Longitude: </b>", data$Longitude,
-                    "<br>", "<b>Latitude: </b>", data$Latitude)
-
-leaflet(data, width = "100%") %>% addTiles() %>%
-  addTiles(group = "OSM (default)") %>%
-  addProviderTiles(provider = "Esri.WorldStreetMap",group = "World StreetMap") %>%
-  addProviderTiles(provider = "Esri.WorldImagery",group = "World Imagery") %>%
-  # addProviderTiles(provider = "NASAGIBS.ViirsEarthAtNight2012",group = "Nighttime Imagery") %>%
-  addMarkers(lng = ~Longitude, lat = ~Latitude, popup = data$popup, clusterOptions = markerClusterOptions()) %>%
-  addLayersControl(
-    baseGroups = c("OSM (default)","World StreetMap", "World Imagery"),
-    options = layersControlOptions(collapsed = FALSE)
-  )
+# library(leaflet)
+# data <- huh 
+# data$popup <- paste("<b>Incident #: </b>", data$Case.Number, "<br>", "<b>Category: </b>", data$Primary.Type,
+#                     "<br>", "<b>Description: </b>", data$Description,
+#                     "<br>", "<b>Location Description: </b>", data$Location.Description,
+#                     "<br>", "<b>Community Area: </b>", data$Community.Area,
+#                     "<br>", "<b>Time: </b>", data$Time,
+#                     "<br>", "<b>Time: </b>", data$Year,
+#                     "<br>", "<b>Crime Type: </b>", data$crime,
+#                     "<br>", "<b>Longitude: </b>", data$Longitude,
+#                     "<br>", "<b>Latitude: </b>", data$Latitude)
+# 
+# leaflet(data, width = "100%") %>% addTiles() %>%
+#   addTiles(group = "OSM (default)") %>%
+#   addProviderTiles(provider = "Esri.WorldStreetMap",group = "World StreetMap") %>%
+#   addProviderTiles(provider = "Esri.WorldImagery",group = "World Imagery") %>%
+#   # addProviderTiles(provider = "NASAGIBS.ViirsEarthAtNight2012",group = "Nighttime Imagery") %>%
+#   addMarkers(lng = ~Longitude, lat = ~Latitude, popup = data$popup, clusterOptions = markerClusterOptions()) %>%
+#   addLayersControl(
+#     baseGroups = c("OSM (default)","World StreetMap", "World Imagery"),
+#     options = layersControlOptions(collapsed = FALSE)
+#   )
 ```
 # Visualization of Crimes and Arrest Relationship
 
 ```{r}
-
 
 cleaned.crime.data$crime <- as.factor(cleaned.crime.data$crime)
 
@@ -159,9 +165,10 @@ hchart(tseries, name = "crime") %>%
  hc_add_series(arrests_tseries, name = "Arrest") %>%
  hc_add_theme(hc_theme_monokai()) %>%
  hc_credits(enabled = TRUE, text = "Sources: City of Chicago Administration and the Chicago Police Department", style = list(fontSize = "12px")) %>%
- hc_title(text = "Trend of Chicago Crimes and Arrests") %>%
+ hc_title(text = "Trend of Chicago Crimes and Arrests") %>% 
  hc_legend(enabled = TRUE)
 ```
+
 
 ```{r}
 # %-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0
@@ -193,15 +200,19 @@ bbox: This is the bounding box of the cordinates, and
 proj4string: THis is the Coordinate Reference System. (places our data in longitude and latitude format)
 
 ```{r}
-saveRDS(crime_spatial_df, "C:/Users/Ron III/Documents/GitHub/Chicago_Crime_Evolution_Analysis/crime_spatial_df.rds")
+saveRDS(crime_spatial_df, "C:/Users/Bloody Dachi/Documents/Chicago_Crime_Evolution_Analysis/crime_spatial_df.rds")
+#saveRDS(crime_spatial_df, "C:/Users/Ron III/Documents/GitHub/Chicago_Crime_Evolution_Analysis/crime_spatial_df.rds")
 
 
 ```
 
 
 ```{r}
-unzip("C:/Users/Ron III/Documents/GitHub/Chicago_Crime_Evolution_Analysis/Data_Sets_Files/Boundaries - ZIP Codes.zip", exdir = "C:/Users/Ron III/Documents/Crime_Research/shapefiles_1", overwrite = TRUE)
-illinois_shp <- readOGR(dsn = "C:/Users/Ron III/Documents/GitHub/Chicago_Crime_Evolution_Analysis/shapefiles_1",layer = "geo_export_6c977322-0a01-4386-849c-278ec22209fe" )
+unzip("C:/Users/Bloody Dachi/Documents/Chicago_Crime_Evolution_Analysis/Data_Sets_Files/Boundaries - ZIP Codes.zip", exdir = "C:/Users/Bloody Dachi/Documents/Crime_Research/shapefiles_1", overwrite = TRUE)
+illinois_shp <- readOGR(dsn = "C:/Users/Bloody Dachi/Documents/Chicago_Crime_Evolution_Analysis/shapefiles_1",layer = "geo_export_6c977322-0a01-4386-849c-278ec22209fe" )
+
+#unzip("C:/Users/Ron III/Documents/GitHub/Chicago_Crime_Evolution_Analysis/Data_Sets_Files/Boundaries - ZIP Codes.zip", exdir = "C:/Users/Ron III/Documents/Crime_Research/shapefiles_1", overwrite = TRUE)
+#illinois_shp <- readOGR(dsn = "C:/Users/Ron III/Documents/GitHub/Chicago_Crime_Evolution_Analysis/shapefiles_1",layer = "geo_export_6c977322-0a01-4386-849c-278ec22209fe" )
 
 # 
 # plot(crime_spatial_df,pch="+",cex=0.5,main="",col=crime_spatial_df$Primary.Type)
@@ -218,11 +229,13 @@ lon <- cleaned.crime.data$Longitude
 lat <- cleaned.crime.data$Latitude
 xrange <- range(lon,na.rm = T)
 yrange <- range(lat,na.rm = T)
-crime_ppp <- ppp(lon,lat,xrange,yrange,marks = as.factor(cleaned.crime.data$Primary.Type))
+
+crime_ppp <- ppp(lon,lat,xrange,yrange,marks = as.factor(cleaned.crime.data$crime))
 ```
 
 
 ```{r}
+
 plot(crime_ppp, main = "Our Crime PPP Object")
 ```
 
@@ -261,6 +274,12 @@ plot(k)
 ```
 
 Based on our Kolmogorov-Smirnov test of CSR we have found that our crime data was not from a population distributed by the standards of CSR. This is show in our presented plot above where if our data did follow the assumptions of CSR our cumulative distributions would be different.
+
+
+```{r}
+library(dtwclust)
+hclust=tsclust(cleaned.crime.data,type='h',distance='sbd')
+```
 
 ### G function: Distance to the nearest event
 ```{r}

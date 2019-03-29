@@ -1,0 +1,165 @@
+---
+title: "test_file_geostat"
+author: "Ronald Washington III"
+date: "March 19, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Importing Libraries
+
+```{r include=FALSE}
+library(dplyr)
+library(readr)
+library(ggplot2) 
+library(ggrepel)
+library(knitr)
+library(chron)
+library(scales)
+library(shapefiles)
+library(maptools)
+library(spatstat)
+library(xts) 
+library(ggmap)
+library(highcharter)
+library(lubridate)
+```
+
+# Reading in Data
+
+```{r}
+crime.data <- read.csv(("C:/Users/Bloody Dachi/Documents/Crimes_-_2001_to_present (1).csv"))
+#crime.data <- read.csv("https://data.cityofchicago.org/api/views/ijzp-q8t2/rows.csv?accessType=DOWNLOAD",nrows = 50000)
+```
+
+# Cleaning of data
+
+```{r}
+cleaned.crime.data <- subset(crime.data, !duplicated(crime.data$Case.Number)) #Removal of duplicates
+#cleaned.crime.data <- cleaned.crime.data %>% filter(Arrest=="true") #Limiting to only arrests 
+cleaned.crime.data$Date <- as.POSIXct(cleaned.crime.data$Date,format=" %m/%d/%Y %H:%M") #readable date format
+cleaned.crime.data$Time <- times(format(cleaned.crime.data$Date," %H:%M:%S")) #inclusion of time column
+cleaned.crime.data$DayOfWeek <-wday(as.Date(cleaned.crime.data$Date,'%m/%d/%Y'), label=TRUE)
+
+#as.POSIXct(cleaned.crime.data$Date,format=" %m/%d/%Y %H:%M") #readable date format
+# Separating into time chucks for time analysis which will aid in seasonal analysis
+Time.tag <- chron(times= c("00:00:00", "06:00:00", "12:00:00", "18:00:00","23:59:00"))
+cleaned.crime.data$Time.tag <- cut(cleaned.crime.data$Time, breaks=Time.tag,labels=c("00-06","06-12", "12-18", "18-00"), include.lowest=TRUE)
+cleaned.crime.data$Date <- as.POSIXct(strptime(cleaned.crime.data$Date,format= " %Y-%m-%d"))#readable date format / without time
+
+# Removal of NAs found within Longitude and Latitutde and Date
+cleaned.crime.data <- subset(cleaned.crime.data, !is.na(cleaned.crime.data$Latitude))
+cleaned.crime.data <- subset(cleaned.crime.data, !is.na(cleaned.crime.data$Date))
+```
+
+## Reducing the number of crime types/descriptions
+### Number of Different types of Crime type
+
+```{r}
+length(table(cleaned.crime.data$Primary.Type)) # 30 found
+
+(table(cleaned.crime.data$Primary.Type)) #occurances of each
+```
+
+### Creating classifications for crime types
+
+```{r}
+cleaned.crime.data$crime <- as.character(cleaned.crime.data$Primary.Type)
+
+cleaned.crime.data$crime <- ifelse(cleaned.crime.data$crime %in% c("CRIM SEXUAL ASSAULT","PROSTITUTION", "SEX OFFENSE"), "SEXUAL", cleaned.crime.data$crime)
+
+cleaned.crime.data$crime <- ifelse(cleaned.crime.data$crime %in% c("MOTOR VEHICLE THEFT"),"VEHICLE", cleaned.crime.data$crime)
+
+cleaned.crime.data$crime <- ifelse(cleaned.crime.data$crime %in% c("GAMBLING", "INTERFERE WITH PUBLIC OFFICER","INTERFERENCE WITH PUBLIC OFFICER" ,"INTIMIDATION",
+                                                     "LIQUOR LAW VIOLATION",  "OBSCENITY" , "NON-CRIMINAL","PUBLIC PEACE VIOLATION", "PUBLIC INDECENCY", 
+                                                     "STALKING" ,  "NON-CRIMINAL (SUBJECT SPECIFIED)" ), "NON-VIOLATION", cleaned.crime.data$crime)
+
+cleaned.crime.data$crime <- ifelse(cleaned.crime.data$crime == "CRIMINAL DAMAGE", "DAMAGE",cleaned.crime.data$crime)
+
+cleaned.crime.data$crime <- ifelse(cleaned.crime.data$crime == "CRIMINAL TRESPASS","TRESPASS", cleaned.crime.data$crime)
+
+cleaned.crime.data$crime <- ifelse(cleaned.crime.data$crime %in% c("NARCOTICS","OTHER NARCOTIC VIOLATION","OTHER NARCOTIC VIOLATION"),
+                                   "DRUG", cleaned.crime.data$crime)
+
+cleaned.crime.data$crime <- ifelse(cleaned.crime.data$crime ==  "DECEPTIVE PRACTICE","FRAUD", cleaned.crime.data$crime)
+
+cleaned.crime.data$crime <- ifelse(cleaned.crime.data$crime %in% c("OTHER OFFENSE", "OTHER OFFENSE"), "OTHER", cleaned.crime.data$crime)
+
+cleaned.crime.data$crime <- ifelse(cleaned.crime.data$crime %in% c("KIDNAPPING", "WEAPONS VIOLATION", "OFFENSE INVOLVING CHILDREN"), "VIOLATION", cleaned.crime.data$crime)
+```
+
+```{r}
+cleaned.crime.data <- subset(cleaned.crime.data, !is.na(cleaned.crime.data$crime))
+(table(cleaned.crime.data$crime)) #occurances of each
+```
+
+
+# Data Exploration
+
+## Aggregated Data Presenting Top 6 Types of Crimes and Relative Distribution 
+
+```{r}
+huh<- as.data.frame(cleaned.crime.data)
+df_crime_daily <- huh %>%
+  group_by(crime,Time.tag,DayOfWeek) %>%
+  summarize(count = n()) %>%
+  mutate(norm = count/sum(count)) %>%
+  arrange(crime)
+```
+
+```{r}
+df_category <- sort(table(huh$crime),decreasing = TRUE)
+df_category <- data.frame(df_category[df_category > 1])
+colnames(df_category) <- c("Category", "Frequency")
+df_category$Percentage <- df_category$Frequency / sum(df_category$Frequency)
+x<-head(df_category)
+x
+```
+
+
+# Visualization of Crimes and Arrest Relationship
+
+```{r}
+
+cleaned.crime.data$crime <- as.factor(cleaned.crime.data$crime)
+
+by_Date <- cleaned.crime.data %>% group_by(Date) %>% summarise(Total = n())
+tseries <- xts(by_Date$Total, order.by=as.POSIXct(by_Date$Date))
+
+#Arrests_by_Date$Date[!(Arrests_by_Date$Date %in% by_Date$Date)]
+## Creating timeseries of arrests made
+Arrests_by_Date <- (cleaned.crime.data[cleaned.crime.data$Arrest == 'true',]) %>% group_by(Date) %>% summarise(Total = n())
+arrests_tseries <- xts(Arrests_by_Date$Total, order.by=as.POSIXct(Arrests_by_Date$Date))
+
+
+hchart(tseries, name = "crime") %>% 
+ hc_add_series(arrests_tseries, name = "Arrest") %>%
+ hc_add_theme(hc_theme_monokai()) %>%
+ hc_credits(enabled = TRUE, text = "Sources: City of Chicago Administration and the Chicago Police Department", style = list(fontSize = "12px")) %>%
+ hc_title(text = "Trend of Chicago Crimes and Arrests") %>% 
+ hc_legend(enabled = TRUE)
+```
+
+```{r}
+library(ggthemes)
+plot <- ggplot(df_crime_daily, aes(x = Time.tag, y = DayOfWeek, fill = norm)) +
+  geom_tile() +
+  # fte_theme() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.6, size = 4)) +
+  labs(x = "Hour of Arrest (Local Time)", y = "Day of Week of Arrest", title = "Police Arrests in Chicago from 2007 - 2016 by Time of Arrest, Type of Crime") +scale_fill_gradient(low = "grey", high = "blue") +
+  facet_wrap(~ crime, ncol = 6)
+plot
+```
+
+```{r}
+# %-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0
+# %-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0
+# %-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0
+# %-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0
+# %-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0
+# %-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0
+```
+
