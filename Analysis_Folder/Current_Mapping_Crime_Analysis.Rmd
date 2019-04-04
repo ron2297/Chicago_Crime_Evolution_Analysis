@@ -192,7 +192,7 @@ x #gathers top 6
 
 
 
-# Visualization of Crimes and Arrest Relationship
+## Visualization of Crimes and Arrest Relationship
 
 ```{r}
 df_Crime$crime <- as.factor(df_Crime$crime)
@@ -253,9 +253,9 @@ cat_plot1
 
 
 
-# Mapping Chicago
+## Mapping Chicago
 
-```{r}
+```{r include=FALSE}
 chicago = get_stamenmap(bbox = c(left = -88.0225, bottom = 41.5949, right = -87.2713, top = 42.0677), maptype = c("toner-lite"), zoom = 13)
 map = ggmap(chicago)
 map
@@ -326,7 +326,7 @@ p2
 ```
 
 
-# Crime vs Years
+### Crime vs Years
 ```{r}
 data_plot = df_Crime %>%
         group_by(Year,Month) %>%
@@ -370,7 +370,7 @@ chicago_map <- get_map(location = bbox, source = "stamen", maptype = "toner-lite
 
 
 
-#Top 10 is actually Top 6
+###Top 10 is actually Top 6
 
 ```{r}
 map_crime <- function(crime_df) {

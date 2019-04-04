@@ -1,0 +1,148 @@
+---
+title: "Current_Statistics_Chicago_Crime"
+author: "Ronald Washington III"
+date: "April 2, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r include=FALSE}
+library(dplyr) 
+library(readr)
+library(ggplot2) 
+library(knitr)
+library(plyr)
+library(maptools)
+library(rgdal)
+library(rgeos)
+library(shapefiles)
+library(sf)
+library(sp)
+library(spatstat)
+```
+
+## Reading in Data
+```{r include=FALSE}
+# Load Chicago Crimes 2016-2018 CSV
+df_crime<-read_csv("C:/Users/Ron III/Desktop/processs_crime_data.csv")
+```
+
+## Filtering Data to only top 5 types of crimes 
+
+
+```{r}               
+df_crime_top5 <- subset(df_crime, crime %in% c("THEFT", "BATTERY", "DAMAGE" ,"DRUG","ASSAULT"))
+```
+
+```{r}
+crime.agg<- ddply(df_crime_top5, .(crime, Arrest, District, Date, Longitude,Latitude, Time.tag, DayOfWeek, Month), summarise, count=length(Date),.progress='text')
+```
+
+# Cluster Identification Methods
+
+[INSERT EXPLAINATION: WHY ARE YOU PERFORMING POINT PATTERN ANALYSIS - Due to your data being spatial you are interested in understanding the underlying patterns that occur from crimes in Chicago, and want to identifying the variablity between them and observe their temporal changes throughout time and attempt to predict off of it]
+
+[INSERT EXPLAINATION OF WHAT POINT PATTERN ANALYSIS IS]
+
+[INSERT EXPLAINATION OF HOW YOUR DATA IS INHOMOGENEOUS DUE TO THE INTENSITY (DENISTY) OF YOUR DATA CHANGING DEPENDING ON THE SPACE (LOCATION). STATE THAT YOU WILL BE USING INHOMOGENEOUS POISSON PROCESS]
+
+[INSERT DESCRIPTION: YOU ARE INTERESTED IN ANALYZING THE TOP 5 TYPES OF CRIME IN CHICAGO ARE DISTRIBUTED IN SPACE AND TIME. SPECIFICALLY YOU WANT TO INVESTIGATE THE INTERACTION BETWEEN THESE TYPES OF CRIMES WITHIN POLICE DISTRICTS OR BETWEEN EACH OTHER]
+
+
+Within this section we will be implementing numerous techniques to check for any form of clustering within our data points. Here we will be utilizing point pattern analysis as a metric of finding clustering, and we will be utilizing the Kolmogorov-Smirnov test as another method of determining if there are clusters.
+
+## Beginning Point Pattern Analysis
+
+### Removing Outlier Coordinates
+```{r}
+df_crime_top5=df_crime_top5 %>% filter(Latitude > 40) 
+df_crime_top5=df_crime_top5 %>% filter(Longitude > -90) 
+```
+
+```{r include=FALSE}
+coords <- SpatialPoints(df_crime_top5[,c("Longitude","Latitude")])
+crime_spatial_df <-SpatialPointsDataFrame(coords,df_crime_top5)
+proj4string(crime_spatial_df) <- CRS("+proj=longlat +ellps=WGS84")
+```
+
+
+```{r}
+plot(crime_spatial_df)
+```
+
+
+
+```{r include=FALSE}
+
+# Setting up Window Size / Formatting points to fit into shape of Chicago
+
+unzip("C:/Users/Ron III/Documents/GitHub/Chicago_Crime_Evolution_Analysis/Data_Sets_Files/Boundaries - ZIP Codes.zip", exdir = "C:/Users/Ron III/Documents/Crime_Research/shapefiles_1", overwrite = TRUE)
+
+chicago_shp <- readOGR(dsn = "C:/Users/Ron III/Documents/GitHub/Chicago_Crime_Evolution_Analysis/shapefiles_1",layer = "geo_export_6c977322-0a01-4386-849c-278ec22209fe" )
+
+w3=as.owin(chicago_shp)
+```
+
+```{r}
+#crimeProj = spTransform(chicago_shp,CRS("+proj=longlat +ellps=WGS84"))
+
+crimePPP1 = ppp(crime_spatial_df$Longitude[crime_spatial_df$crime=="THEFT"],crime_spatial_df$Latitude[crime_spatial_df$crime=="THEFT"],w3)
+```
+
+### Checking for Inhomogeneity
+
+```{r fig.height=8, fig.width=12}
+#crimePPP1 = ppp(crime_spatial_df$Longitude[crime_spatial_df$crime=="THEFT"],crime_spatial_df$Latitude[crime_spatial_df$crime=="THEFT"],w3)
+# par(mfrow=c(1,2))
+# plot(crimePPP1, main = "Point Plotting Theft", pch = ".", cols =2)
+# qc <- quadratcount(crimePPP1) 
+# plot(qc, main = "Quadratcounting Theft")
+```
+
+
+```{r fig.height=8, fig.width=12}
+
+combining_plots <- function(crime_type){
+  crimePPP1 = ppp(crime_spatial_df$Longitude[crime_spatial_df$crime==crime_type],crime_spatial_df$Latitude[crime_spatial_df$crime==crime_type],w3)
+  par(mfrow=c(1,2))
+  plot(crimePPP1, main = paste0("Point Plotting",crime_type), pch = ".", cols =2)
+  qc <- quadratcount(crimePPP1) 
+  plot(qc, main = paste0("Quadratcounting ",crime_type))
+}
+```
+
+```{r fig.height=8, fig.width=12}
+combining_plots("ASSAULT")
+combining_plots("BATTERY")
+combining_plots("DAMAGE")
+combining_plots("DRUG")
+combining_plots("THEFT")
+```
+
+```{r}
+nns<-nndist(ppp(crime_spatial_df$Longitude[crime_spatial_df$crime=="DRUG"],crime_spatial_df$Latitude[crime_spatial_df$crime=="DRUG"],w3))
+summary(nns)
+plot(Gest(crimePPP1), add = TRUE, lwd = 3)
+```
+
+
+```{r include=FALSE}
+# lon <- crime_spatial_df$Longitude
+# lat <- crime_spatial_df$Latitude
+# xrange <- range(lon,na.rm = T)
+# yrange <- range(lat,na.rm = T)
+# crime_ppp <- ppp(lon,lat,xrange,yrange,marks = as.factor(crime_spatial_df$crime))
+```
+
+```{r}
+# plot(crime_ppp, main = "Our Crime PPP Object")
+```
+
+```{r}
+# qc <- quadratcount(crime_ppp)
+# plot(qc)
+```
+
