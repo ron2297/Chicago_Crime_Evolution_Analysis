@@ -24,7 +24,7 @@ library(sp)
 library(spatstat)
 ```
 
-## Reading in Data
+# Reading in Data
 ```{r include=FALSE}
 # Load Chicago Crimes 2016-2018 CSV
 df_crime<-read_csv("C:/Users/Ron III/Desktop/processs_crime_data.csv")
@@ -54,7 +54,7 @@ crime.agg<- ddply(df_crime_top5, .(crime, Arrest, District, Date, Longitude,Lati
 
 Within this section we will be implementing numerous techniques to check for any form of clustering within our data points. Here we will be utilizing point pattern analysis as a metric of finding clustering, and we will be utilizing the Kolmogorov-Smirnov test as another method of determining if there are clusters.
 
-## Beginning Point Pattern Analysis
+## Point Pattern Analysis
 
 ### Removing Outlier Coordinates
 ```{r}
@@ -94,6 +94,8 @@ crimePPP1 = ppp(crime_spatial_df$Longitude[crime_spatial_df$crime=="THEFT"],crim
 
 ### Checking for Inhomogeneity
 
+[INSERT EXPLAINATION OF WHAT INHOMOGENEITY IS AND HOW IT IS REGARDING THE VARYING DENISTIES WITHIN THE QUADRAT PLOTS, IF IT WERE HOMOGENEOUS THEN ALL THE QUADRANTS WOULD BE THE SAME NUMBER]
+
 ```{r fig.height=8, fig.width=12}
 #crimePPP1 = ppp(crime_spatial_df$Longitude[crime_spatial_df$crime=="THEFT"],crime_spatial_df$Latitude[crime_spatial_df$crime=="THEFT"],w3)
 # par(mfrow=c(1,2))
@@ -122,6 +124,9 @@ combining_plots("DRUG")
 combining_plots("THEFT")
 ```
 
+[CONFIRM THAT ALL OF THE QUADRAT COUNTING IS INHOMOGENEOUS AND THAT WE CAN NOW MOVE FORWARD WITH ESTIMATING INTENSITY]
+
+### Calculating Distance (Nearest Neighborhood) of Crimes Patterns
 ```{r}
 nns<-nndist(ppp(crime_spatial_df$Longitude[crime_spatial_df$crime=="DRUG"],crime_spatial_df$Latitude[crime_spatial_df$crime=="DRUG"],w3))
 summary(nns)
@@ -129,6 +134,29 @@ plot(Gest(crimePPP1), add = TRUE, lwd = 3)
 ```
 
 
+### Plotting G-Function to identify whether there is clustering in each crime pattern
+```{r}
+
+```
+
+### Spatial Modeling of Crime Data
+
+
+## Temporal Analysis
+
+### Time Series Forecasting with Recurrent Neural Networks
+
+[EXPLAIN WHY WE ARE UTILIZING RNN]
+
+#### Long SHort-Term Memory Units (LSTMs)
+
+## DBSCAN Analysis
+
+[INSERT EXPLAINATION WHY WE ARE USING DBSCAN - DUE TO US FINDING THAT THERE ARE CLUSTERING WITHIN OUR CRIME PATTERNS WE NOW WANT TO INVESTIGATE THESE CLUSTERS AND VISUALIZE IF THEY ARE THE SAME CLUSTERS FOUND IN POINT PATTERN ANALYSIS]
+
+[WHAT IS DBSCAN - What is it used for in spatial clustering ]
+
+### Attempting 
 ```{r include=FALSE}
 # lon <- crime_spatial_df$Longitude
 # lat <- crime_spatial_df$Latitude
