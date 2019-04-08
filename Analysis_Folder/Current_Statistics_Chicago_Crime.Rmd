@@ -181,11 +181,11 @@ plot(Minhom, cex = 0.5, col = "white", add = T)
 
 ```{r  fig.height=8, fig.width=8}
 par(mfrow = c(2,3))
-hist(nndist(crimePPP_Assault),breaks = 35, xlab = "distinace in meters", main = "Assualt nearst neighbor distances")
-hist(nndist(crimePPP_Theft),breaks = 35, xlab = "distinace in meters", main = "Theft nearst neighbor distances")
-hist(nndist(crimePPP_Drug),breaks = 35, xlab = "distinace in meters", main = "Drug nearst neighbor distances")
-hist(nndist(crimePPP_Battery),breaks = 35, xlab = "distinace in meters", main = "Battery nearst neighbor distances")
-hist(nndist(crimePPP_Damage),breaks = 35, xlab = "distinace in meters", main = "Damage nearst neighbor distances")
+hist(nndist(crimePPP_Assault),breaks = 11, xlab = "distinace in meters", main = "Assualt nearst neighbor distances")
+hist(nndist(crimePPP_Theft),breaks = 11, xlab = "distinace in meters", main = "Theft nearst neighbor distances")
+hist(nndist(crimePPP_Drug),breaks = 11 ,xlab = "distinace in meters", main = "Drug nearst neighbor distances")
+hist(nndist(crimePPP_Battery),breaks = 11, xlab = "distinace in meters", main = "Battery nearst neighbor distances")
+hist(nndist(crimePPP_Damage),breaks = 11, xlab = "distinace in meters", main = "Damage nearst neighbor distances")
 ```
 
 ```{r}
@@ -245,7 +245,11 @@ distance_table <- function(crime_type_dist){
 # to each other not being a lot. If the value small then the case
 # that the crimes occur around each other is high
 
-#Battery_Dist_Comparison_DF <- distance_table(crimePPP_Battery)
+Theft_Dist_Comparison_DF <- distance_table(crimePPP_Theft)
+Assualt_Dist_Comparison_DF <- distance_table(crimePPP_Assualt)
+Battery_Dist_Comparison_DF <- distance_table(crimePPP_Battery)
+Drug_Dist_Comparison_DF <- distance_table(crimePPP_Drug)
+Damage_Dist_Comparison_DF <- distance_table(crimePPP_Damage)
 ```
 
 
