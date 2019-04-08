@@ -27,7 +27,8 @@ library(spatstat)
 # Reading in Data
 ```{r include=FALSE}
 # Load Chicago Crimes 2016-2018 CSV
-df_crime<-read_csv("C:/Users/Ron III/Desktop/processs_crime_data.csv")
+df_crime<-read.csv("C:/Users/Ron III/Desktop/processs_crime_data.csv",nrows = 50000)
+#crime.data <- read.csv("https://data.cityofchicago.org/api/views/ijzp-q8t2/rows.csv?accessType=DOWNLOAD",nrows = 50000)
 ```
 
 ## Filtering Data to only top 5 types of crimes 
@@ -37,11 +38,6 @@ df_crime<-read_csv("C:/Users/Ron III/Desktop/processs_crime_data.csv")
 df_crime_top5 <- subset(df_crime, crime %in% c("THEFT", "BATTERY", "DAMAGE" ,"DRUG","ASSAULT"))
 ```
 
-```{r}
-# crime.agg<- ddply(df_crime_top5, .(crime, Arrest, District, Date, Longitude,Latitude, Time.tag, DayOfWeek, Month), summarise, count=length(Date),.progress='text')
-# 
-# table(df_crime_top5$crime)
-```
 
 # Cluster Identification Methods
 
@@ -98,14 +94,6 @@ w3=as.owin(chicago_shp)
 
 [INSERT EXPLAINATION OF WHAT INHOMOGENEITY IS AND HOW IT IS REGARDING THE VARYING DENISTIES WITHIN THE QUADRAT PLOTS, IF IT WERE HOMOGENEOUS THEN ALL THE QUADRANTS WOULD BE THE SAME NUMBER]
 
-```{r fig.height=8, fig.width=12}
-#crimePPP1 = ppp(crime_spatial_df$Longitude[crime_spatial_df$crime=="THEFT"],crime_spatial_df$Latitude[crime_spatial_df$crime=="THEFT"],w3)
-# par(mfrow=c(1,2))
-# plot(crimePPP1, main = "Point Plotting Theft", pch = ".", cols =2)
-# qc <- quadratcount(crimePPP1) 
-# plot(qc, main = "Quadratcounting Theft")
-```
-
 
 ```{r fig.height=8, fig.width=12}
 
@@ -144,21 +132,6 @@ crimePPP_Drug = ppp(crime_spatial_df$Longitude[crime_spatial_df$crime=="DRUG"],c
 
 ```
 
-```{r}
-# assualt_density <- density.ppp(crimePPP_Assault,sigma = bw.scott(crimePPP_Assault))
-# theft_density <- density.ppp(crimePPP_Theft,sigma = bw.scott(crimePPP_Theft))
-# 
-# Assualt_to_Theft_Dist = nncross(crimePPP_Assault,crimePPP_Theft)
-# #hist(Battery_to_Damage_Dist$dist,main="")
-# 
-# 
-# 
-# # DONT TOUCH
-# Y = list(crimePPP_Assault,crimePPP_Battery,crimePPP_Damage,crimePPP_Drug,crimePPP_Theft)
-# X = crimePPP_Assault
-# for (i in 2: length(Y)){ X = superimpose(X,Y[[i]])}
-
-```
 
 ```{r}
 marks(crimePPP_Assault) = rep("Assualt", npoints(crimePPP_Assault))
@@ -175,26 +148,73 @@ marks(crimePPP_Drug) = rep("Drug", npoints(crimePPP_Drug))
 # DONT TOUCH
 Y = list(crimePPP_Assault,crimePPP_Battery,crimePPP_Damage,crimePPP_Drug,crimePPP_Theft)
 X = crimePPP_Assault
-#for (i in 2: length(Y)){ X = superimpose(X,Y[[i]])}
-sapply(seq_along(Y),function(X){ X = superimpose(X,Y[[i]])})
+for (i in 2: length(Y)){ X = superimpose(X,Y[[i]])}
+#sapply(seq_along(Y),function(x){ X = superimpose(X,Y[[x]])})
 
 marks(X)=as.factor(marks(X))
 ```
 
 ```{r}
-#marks(X)
+# the lambda argument specifys the density plot for assessing inhomogeneity
+(Minhom<-quadrat.test(crimePPP_Assault, nx = 4, ny = 10, method = "MonteCarlo", lambda = density(crimePPP_Assault, sigma = .5)))
+```
+```{r}
+plot(density(crimePPP_Assault,sigma = .5), main = "grid counts for inhomogenious denisty")
+plot(Minhom, cex = 0.5, col = "white", add = T)
+```
 
+
+
+
+
+
+### WORK ON - Calculating distances between Crime PPPs
+
+```{r}
+z<- crossdist(crimePPP_Assault,crimePPP_Theft)
+plot(z)
+mean(z)
+
+b <- crossdist(crimePPP_Assault,crimePPP_Drug)
+plot(b)
+mean(b)
+
+t.test(z,b)
+```
+
+```{r  fig.height=8, fig.width=12}
+par(mfrow = c(1,2))
+hist(nndist(crimePPP_Assault),breaks = 35, xlab = "distinace in meters", main = "Assualt nearst neighbor distances")
+hist(nndist(crimePPP_Theft),breaks = 35, xlab = "distinace in meters", main = "Theft nearst neighbor distances")
+```
+
+```{r}
+
+Assualt_Theft_Dist <- pppdist(crimePPP_Assault,crimePPP_Theft,type = "spa")
+Assualt_Battery_Dist <- pppdist(crimePPP_Assault,crimePPP_Battery,type = "spa")
+Assualt_Drug_Dist <- pppdist(crimePPP_Assault,crimePPP_Drug,type = "spa")
+Assualt_Damage_Dist <- pppdist(crimePPP_Assault,crimePPP_Damage,type = "spa")
+
+Assualt_Theft_Dist$distance
+
+crime_distance_df <- data.frame(Theft = as.numeric(),Battery = as.numeric(),Drug = as.numeric(),Damage = as.numeric())
+crime_distance_df$Theft = Assualt_Theft_Dist$distance
+crime_distance_df
+```
+
+```{r}
+#marks(X)
+ 
 assualt_density <- density.ppp(crimePPP_Assault,sigma = bw.scott(crimePPP_Assault))
 theft_density <- density.ppp(crimePPP_Theft,sigma = bw.scott(crimePPP_Theft))
 
-# Kest.
-# #k12 = Kcross.inhom(X,"Assualt","Theft",assualt_density,theft_density,r =seq (min(Assualt_to_Theft_Dist$dist) ,summary(Assualt_to_Theft_Dist$dist)[[5]],length.out = 2) , main = "", ribwid = 0.06, ribsep = 0.06)
-# g122 = pcfcross.inhom(X,r=NULL,breaks=NULL, correction = "best")
-# plot(g122)
-#Ginhom(X,sigma=10)
-soethin = pcfcross.inhom(X, "Assualt","Theft",assualt_density,theft_density,legendpos="bottom")
+# mean(nndist(crimePPP_Assault,k=1))*1000
+# summary(crimePPP_Assault)
+
 g12 = Gcross(X, "Assualt","Theft",assualt_density,theft_density,r=NULL,breaks=NULL, correction = "best")
 plot( g12 )
+
+X
 ```
 
 ### Plotting G-Function to identify whether there is clustering in each crime pattern
