@@ -30,6 +30,7 @@ library(spatstat)
 # Load Chicago Crimes 2016-2018 CSV
 df_crime<-read.csv("C:/Users/Bloody Dachi/Desktop/processs_crime_data.csv")#,nrows = 50000)
 #crime.data <- read.csv("https://data.cityofchicago.org/api/views/ijzp-q8t2/rows.csv?accessType=DOWNLOAD",nrows = 50000)
+crimePPP_Assault$
 ```
 
 ## Filtering Data to only top 5 types of crimes 
@@ -86,16 +87,11 @@ chicago_shp <- readOGR(dsn = "C:/Users/Bloody Dachi/Documents/Chicago_Crime_Evol
 w3=as.owin(chicago_shp)
 ```
 
-```{r}
-#crimeProj = spTransform(chicago_shp,CRS("+proj=longlat +ellps=WGS84"))
-
-#crimePPP1 = ppp(crime_spatial_df$Longitude[crime_spatial_df$crime=="THEFT"],crime_spatial_df$Latitude[crime_spatial_df$crime=="THEFT"],w3)
-```
-
 ### Checking for Inhomogeneity
 
 [INSERT EXPLAINATION OF WHAT INHOMOGENEITY IS AND HOW IT IS REGARDING THE VARYING DENISTIES WITHIN THE QUADRAT PLOTS, IF IT WERE HOMOGENEOUS THEN ALL THE QUADRANTS WOULD BE THE SAME NUMBER]
 
+#### Check #1 - Quadrat Distribution
 
 ```{r fig.height=8, fig.width=12}
 
@@ -108,7 +104,7 @@ combining_plots <- function(crime_type){
 }
 ```
 
-```{r fig.height=8, fig.width=12}
+```{r fig.height=8, fig.width=12, warning=FALSE}
 combining_plots("ASSAULT")
 combining_plots("BATTERY")
 combining_plots("DAMAGE")
@@ -118,23 +114,9 @@ combining_plots("THEFT")
 
 [CONFIRM THAT ALL OF THE QUADRAT COUNTING IS INHOMOGENEOUS AND THAT WE CAN NOW MOVE FORWARD WITH ESTIMATING INTENSITY]
 
-```{r}
-# nns<-nndist(ppp(crime_spatial_df$Longitude[crime_spatial_df$crime=="DRUG"],crime_spatial_df$Latitude[crime_spatial_df$crime=="DRUG"],w3))
-# summary(nns)
-# mean(nns)
-# plot(ecdf(nns))
+#### Creating Point Patterns for each Crime Type
 
-# clarkevans(crimePPP_Theft, correction = "none")
-# rr <- ripras(crimePPP_Theft)
-# clarkevans(crimePPP_Theft, correction = "guard", clipregion = erosion.owin(rr,  r = .1))
-
-# plot(Gest(crimePPP1), add = TRUE, lwd = 3)
-# crimePPP_Theft_rr <- ppp(crimePPP_Theft$x, + crimePPP_Theft$y, window = rr)
-# ex <- expression(runifpoint(crimePPP_Theft_rr$n, win = rr)) 
-# res <- envelope(crimePPP_Theft_rr, Kest, nsim = 99, simulate = ex, verbose = FALSE, saveall = TRUE)
-```
-
-```{r}
+```{r message=FALSE, warning=FALSE}
 crimePPP_Theft = ppp(crime_spatial_df$Longitude[crime_spatial_df$crime=="THEFT"],crime_spatial_df$Latitude[crime_spatial_df$crime=="THEFT"],w3)
 crimePPP_Battery = ppp(crime_spatial_df$Longitude[crime_spatial_df$crime=="BATTERY"],crime_spatial_df$Latitude[crime_spatial_df$crime=="BATTERY"],w3)
 crimePPP_Damage = ppp(crime_spatial_df$Longitude[crime_spatial_df$crime=="DAMAGE"],crime_spatial_df$Latitude[crime_spatial_df$crime=="DAMAGE"],w3)
@@ -143,6 +125,7 @@ crimePPP_Drug = ppp(crime_spatial_df$Longitude[crime_spatial_df$crime=="DRUG"],c
 
 ```
 
+#### Labeling Crime Patterns 
 
 ```{r}
 marks(crimePPP_Assault) = rep("Assualt", npoints(crimePPP_Assault))
@@ -154,18 +137,35 @@ marks(crimePPP_Drug) = rep("Drug", npoints(crimePPP_Drug))
 
 ```
 
-```{r}
-# the lambda argument specifys the density plot for assessing inhomogeneity
-(Minhom<-quadrat.test(crimePPP_Assault, nx = 4, ny = 10, method = "MonteCarlo", lambda = density(crimePPP_Assault, sigma = .5)))
+
+#### Check #2 - Quadrat Monte Carlo Test / Visual Representation of Denisty Distribution
+
+```{r fig.height=8, fig.width=8, message=FALSE, warning=FALSE}
+Inhomo_Test_Check <- function(crime_type){
+  # the lambda argument specifys the density plot for assessing inhomogeneity
+  print((Minhom<-quadrat.test(crime_type, nx = 4, ny = 10, method = "MonteCarlo", lambda = density(crime_type, sigma = .5))))
+  plot(density(crime_type,sigma = .5), main =paste0("Grid counts for inhomogenious denisty: ",crime_type$marks[1]) )
+  plot(Minhom, cex = 0.5, col = "white", add = T)
+}
+
+Inhomo_Test_Check(crimePPP_Theft)
+Inhomo_Test_Check(crimePPP_Battery)
+Inhomo_Test_Check(crimePPP_Damage)
+Inhomo_Test_Check(crimePPP_Assault)
+Inhomo_Test_Check(crimePPP_Drug)
+
 ```
-```{r}
-plot(density(crimePPP_Assault,sigma = .5), main = "grid counts for inhomogenious denisty")
-plot(Minhom, cex = 0.5, col = "white", add = T)
-```
+
+[DISCUSS HOW THESE DIFFERENT DISTRUBITONS INSINUATES THAT THERE IS CLUSTERING IN THE POINT PATTERNS]
+
 
 
 ### Testing for Clustering within Crimes Patterns
-```{r}
+
+
+#### Check #1 - Clark and Evans Test
+
+```{r message=FALSE, warning=FALSE}
 #The Clark and Evans (1954) aggregation index R 
 #is a crude measure of clustering or ordering of 
 #a point pattern. It is the ratio of the observed 
@@ -174,12 +174,6 @@ plot(Minhom, cex = 0.5, col = "white", add = T)
 #same intensity. A value R > 1 suggests ordering, 
 #while R < 1 suggests clustering.
 
-
-#clarkevans(crimePPP_Theft, correction = "none")
-#rr <- ripras(crimePPP_Theft)
-#bruh <- clarkevans(crimePPP_Damage, correction = "guard", clipregion = erosion.owin(rr,  r = .1))
-#bruh
-#clarkevans.test(crimePPP_Damage, correction = "guard", clipregion = erosion.owin(rr,  r = .1),alternative=c("clustered"),nsim=2)
 
 Theft_Cluster_Check<- clarkevans(crimePPP_Theft, correction = "guard", clipregion = erosion.owin(rr,  r = .1))
 Assualt_Cluster_Check<- clarkevans(crimePPP_Assault, correction = "guard", clipregion = erosion.owin(rr,  r = .1))
@@ -197,6 +191,25 @@ crime_cluster_check_df$Damage <- Damage_Cluster_Check
 crime_cluster_check_df
 ```
 
+[DISCUSS HOW THE INDEX R VALUES FOR EACH OF THE POINT PATTERNS PRESENT THTA THERE IS CLUSTERING WITHIN THEIR DATA.]
+
+
+#### Check #2 - Plotting G-Function to identify whether there is clustering in each crime pattern
+
+```{r message=FALSE, warning=FALSE}
+#The nearest neighbour distance distribution function (also called the ``event-to-event'' or ``inter-event'' distribution) of a point process X is the cumulative distribution function G the distance from a typical random point of X to the nearest other point of X.
+Gest_Cluster_Graph <- function(crime_type){
+  # the lambda argument specifys the density plot for assessing inhomogeneity
+  G <- Gest(crime_type)
+  plot(G)
+}
+
+Gest_Cluster_Graph(crimePPP_Theft)
+Gest_Cluster_Graph(crimePPP_Battery)
+Gest_Cluster_Graph(crimePPP_Damage)
+Gest_Cluster_Graph(crimePPP_Assault)
+Gest_Cluster_Graph(crimePPP_Drug)
+```
 
 ### Calculating Distance (Nearest Neighborhood) of Crimes Patterns
 
