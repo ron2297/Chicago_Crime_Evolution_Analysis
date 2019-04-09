@@ -331,6 +331,25 @@ DBSCAN_Cluster_Plots(crimePPP_Assault)
 DBSCAN_Cluster_Plots(crimePPP_Drug)
 ```
 
+# Extra shit Bonifonte wants is means of each cluster and wants you to make heat maps of the denisties
+```{r}
+fuck<-as.data.frame(crimePPP_Drug[1:5000,])
+
+clustermeans <- dbscan::dbscan(crossdist(crimePPP_Drug[1:5000],crimePPP_Drug[1:5000]), 0.4, 4)
+summary(clustermeans$cluster)
+#crimePPP_Drug$
+tesing_Shit_cluster<-fviz_cluster(clustermeans, fuck[1:5000,],geom = "point",choose.vars = c("x","y"),main = paste0("DBSCAN Clustering: ",crimePPP_Drug$marks[1]), ggtheme = theme_minimal(),show_labels = FALSE)
+tesing_Shit_cluster
+
+fuck$luster <- clustermeans$cluster
+
+head(clustermeans$cluster,4)
+
+mean(fuck$luster[clustermeans$cluster==1, ])
+
+typeof(fuck$luster)
+
+```
 
 ## Temporal Analysis
 
