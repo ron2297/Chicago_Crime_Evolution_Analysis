@@ -32,7 +32,7 @@ library(spatstat)
 # Load Chicago Crimes 2016-2018 CSV
 df_crime<-read.csv("C:/Users/Bloody Dachi/Desktop/processs_crime_data.csv")#,nrows = 50000)
 #crime.data <- read.csv("https://data.cityofchicago.org/api/views/ijzp-q8t2/rows.csv?accessType=DOWNLOAD",nrows = 50000)
-crimePPP_Assault$
+
 ```
 
 ## Filtering Data to only top 5 types of crimes 
@@ -167,6 +167,7 @@ Inhomo_Test_Check(crimePPP_Drug)
 #### Check #1 - Clark and Evans Test
 
 ```{r message=FALSE, warning=FALSE}
+
 #The Clark and Evans (1954) aggregation index R 
 #is a crude measure of clustering or ordering of 
 #a point pattern. It is the ratio of the observed 
@@ -174,13 +175,13 @@ Inhomo_Test_Check(crimePPP_Drug)
 #that expected for a Poisson point process of the 
 #same intensity. A value R > 1 suggests ordering, 
 #while R < 1 suggests clustering.
+ 
 
-
-Theft_Cluster_Check<- clarkevans(crimePPP_Theft, correction = "guard", clipregion = erosion.owin(rr,  r = .1))
-Assualt_Cluster_Check<- clarkevans(crimePPP_Assault, correction = "guard", clipregion = erosion.owin(rr,  r = .1))
-Battery_Cluster_Check<- clarkevans(crimePPP_Battery, correction = "guard", clipregion = erosion.owin(rr,  r = .1))
-Drug_Cluster_Check<- clarkevans(crimePPP_Drug, correction = "guard", clipregion = erosion.owin(rr,  r = .1))
-Damage_Cluster_Check<- clarkevans(crimePPP_Damage, correction = "guard", clipregion = erosion.owin(rr,  r = .1))
+Theft_Cluster_Check<- clarkevans(crimePPP_Theft, correction = "guard", clipregion = erosion.owin(ripras(crimePPP_Theft),  r = .1))
+Assualt_Cluster_Check<- clarkevans(crimePPP_Assault, correction = "guard", clipregion = erosion.owin(ripras(crimePPP_Assault),  r = .1))
+Battery_Cluster_Check<- clarkevans(crimePPP_Battery, correction = "guard", clipregion = erosion.owin(ripras(crimePPP_Battery),  r = .1))
+Drug_Cluster_Check<- clarkevans(crimePPP_Drug, correction = "guard", clipregion = erosion.owin(ripras(crimePPP_Drug),  r = .1))
+Damage_Cluster_Check<- clarkevans(crimePPP_Damage, correction = "guard", clipregion = erosion.owin(ripras(crimePPP_Damage),  r = .1))
 
 crime_cluster_check_df <- data.frame(Assualt = as.numeric(0),Theft = as.numeric(0),Battery = as.numeric(0),Drug = as.numeric(0),Damage = as.numeric(0))
   
@@ -266,10 +267,18 @@ Damage_Dist_Comparison_DF
 
 ```
 
+
+## DBSCAN Analysis
+
+[INSERT EXPLAINATION WHY WE ARE USING DBSCAN - DUE TO US FINDING THAT THERE ARE CLUSTERING WITHIN OUR CRIME PATTERNS WE NOW WANT TO INVESTIGATE THESE CLUSTERS AND VISUALIZE IF THEY ARE THE SAME CLUSTERS FOUND IN POINT PATTERN ANALYSIS]
+
+[WHAT IS DBSCAN - What is it used for in spatial clustering ]
+
 ```{r}
 library(dbscan)
-dbscan::kNNdistplot(crossdist(crimePPP_Assault[1:10000],crimePPP_Theft[1:10000]), k =  4)
-abline(h = 0.4, lty = 2)
+dbscan::kNNdistplot(crossdist(crimePPP_Assault[1:10000],crimePPP_Assault[1:10000]), k =  4)
+abline(h = 0.25, lty = 2)
+title(main = "Main title")
 ```
 
 
@@ -277,21 +286,51 @@ abline(h = 0.4, lty = 2)
 
 #res.fpc <- fpc::dbscan(crossdist(crimePPP_Assault[1:10000],crimePPP_Theft[1:10000]), eps = 0.4, MinPts = 4)
 # dbscan package
-res.db <- dbscan::dbscan(crossdist(crimePPP_Assault[1:10000],crimePPP_Theft[1:10000]), 0.4, 4)
-
-fviz_cluster(res.db, crossdist(crimePPP_Assault[1:10000],crimePPP_Theft[1:10000]), geom = "point")
+# res.db <- dbscan::dbscan(crossdist(crimePPP_Assault[1:10000],crimePPP_Theft[1:10000]), 0.25, 4)
+# 
+# fviz_cluster(res.db, crossdist(crimePPP_Assault[1:10000],crimePPP_Theft[1:10000]), geom = "point")
 ```
 
-```{r}
-start_time <- Sys.time()
+```{r  fig.height=8, fig.width=12, message=FALSE, warning=FALSE}
+# start_time <- Sys.time()
+# 
+# 
+# res.db <- dbscan::dbscan(crossdist(crimePPP_Assault[1:5000],crimePPP_Theft[1:500]), 0.4, 4)
+# tesing_Shit<-fviz_cluster(res.db, crossdist(crimePPP_Assault[1:5000],crimePPP_Theft[1:5000]), geom = "point",main = paste0("DBSCAN Clustering: ",crimePPP_Assault$marks[1]), ggtheme = theme_minimal(),show_labels = FALSE)
+# 
+# 
+# plot(tesing_Shit, main =paste0("DBSCAN Clustering: ",crimePPP_Assault$marks[1]) )
+# end_time <- Sys.time()
+# print(end_time - start_time)
 
-
-res.db <- dbscan::dbscan(crossdist(crimePPP_Assault[1:5000],crimePPP_Theft[1:5000]), 0.4, 4)
-tesing_Shit<-fviz_cluster(res.db, crossdist(crimePPP_Assault[1:5000],crimePPP_Theft[1:5000]), geom = "point")
-tesing_Shit
-end_time <- Sys.time()
-print(end_time - start_time)
 ```
+
+```{r  fig.height=8, fig.width=12, message=FALSE, warning=FALSE}
+DBSCAN_Cluster_Plots <- function(crime_type_dist){
+  start_time <- Sys.time()
+  
+  
+  res.db <- dbscan::dbscan(crossdist(crime_type_dist[1:5000],crime_type_dist[1:5000]), 0.4, 4)
+  
+  tesing_Shit<-fviz_cluster(res.db, crossdist(crime_type_dist[1:5000],crime_type_dist[1:5000]), 
+                            geom = "point",main = paste0("DBSCAN Clustering: ",crime_type_dist$marks[1]), 
+                            ggtheme = theme_minimal(),show_labels = FALSE)
+  
+  
+  plot(tesing_Shit, main =paste0("DBSCAN Clustering: ",crime_type_dist$marks[1]) )
+  end_time <- Sys.time()
+  print(end_time - start_time)
+}
+
+#DBSCAN_Cluster_Plots(crimePPP_Assault)
+
+DBSCAN_Cluster_Plots(crimePPP_Theft)
+DBSCAN_Cluster_Plots(crimePPP_Battery)
+DBSCAN_Cluster_Plots(crimePPP_Damage)
+DBSCAN_Cluster_Plots(crimePPP_Assault)
+DBSCAN_Cluster_Plots(crimePPP_Drug)
+```
+
 
 ## Temporal Analysis
 
@@ -301,11 +340,7 @@ print(end_time - start_time)
 
 #### Long SHort-Term Memory Units (LSTMs)
 
-## DBSCAN Analysis
 
-[INSERT EXPLAINATION WHY WE ARE USING DBSCAN - DUE TO US FINDING THAT THERE ARE CLUSTERING WITHIN OUR CRIME PATTERNS WE NOW WANT TO INVESTIGATE THESE CLUSTERS AND VISUALIZE IF THEY ARE THE SAME CLUSTERS FOUND IN POINT PATTERN ANALYSIS]
-
-[WHAT IS DBSCAN - What is it used for in spatial clustering ]
 
 ### Attempting 
 ```{r include=FALSE}
