@@ -9,7 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r include=FALSE}
+```{r include=FALSE} 
 library(dplyr) 
 library(readr)
 library(ggplot2) 
@@ -18,7 +18,7 @@ library(plyr)
 library(maptools)
 library(rgdal)
 library(rgeos)
-library(shapefiles)
+library(shapefiles) 
 library(sf)
 library(forecast)
 library(sp)
@@ -155,6 +155,17 @@ marks(crimePPP_Drug) = rep("Drug", npoints(crimePPP_Drug))
 ```
 
 ```{r}
+
+# # DONT TOUCH
+# Y = list(crimePPP_Assault,crimePPP_Battery,crimePPP_Damage,crimePPP_Drug,crimePPP_Theft)
+# X = crimePPP_Assault
+# for (i in 2: length(Y)){ X = superimpose(X,Y[[i]])}
+# #sapply(seq_along(Y),function(x){ X = superimpose(X,Y[[x]])})
+# 
+# marks(X)=as.factor(marks(X))
+```
+
+```{r}
 # the lambda argument specifys the density plot for assessing inhomogeneity
 (Minhom<-quadrat.test(crimePPP_Assault, nx = 4, ny = 10, method = "MonteCarlo", lambda = density(crimePPP_Assault, sigma = .5)))
 ```
@@ -250,6 +261,64 @@ Drug_Dist_Comparison_DF
 Damage_Dist_Comparison_DF
 
 
+```
+
+
+### COME HERE
+
+```{r}
+# Takes about 20min for each table of means to be formed 
+# By the end of the tables being formed you should be able
+# to discuss the relationship of distance betweeen each crime
+# pattter with large values being potential of the crimes happening
+# to each other not being a lot. If the value small then the case
+# that the crimes occur around each other is high
+
+# distance_table <- function(crime_type_dist){
+#   crime_Theft_Dist <- pppdist(crime_type_dist,crimePPP_Theft,type = "spa")
+#   print(paste0("Theft Complete \n "))
+#   crime_Assualt_Dist <- pppdist(crime_type_dist,crimePPP_Assault,type = "spa")
+#   print(paste0("Assualt Complete \n "))
+#   crime_Battery_Dist <- pppdist(crime_type_dist,crimePPP_Battery,type = "spa")
+#   print(paste0("Battery Complete \n "))
+#   crime_Drug_Dist <- pppdist(crime_type_dist,crimePPP_Drug,type = "spa")
+#   print(paste0("Drug Complete \n "))
+#   crime_Damage_Dist <- pppdist(crime_type_dist,crimePPP_Damage,type = "spa")
+#   print(paste0("Damage Complete \n "))
+#   
+#   crime_distance_df <- data.frame(Assualt = as.numeric(0),Theft = as.numeric(0),Battery = as.numeric(0),Drug = as.numeric(0),Damage = as.numeric(0))
+#   
+#   crime_distance_df$Theft <- crime_Theft_Dist$distance
+#   crime_distance_df$Assualt <- crime_Assualt_Dist$distance
+#   crime_distance_df$Battery <- crime_Battery_Dist$distance
+#   crime_distance_df$Drug <- crime_Drug_Dist$distance
+#   crime_distance_df$Damage <- crime_Damage_Dist$distance
+#   print(paste0("Ready to make DataFrame  \n "))
+#   
+#   crime_distance_df
+# }
+# yeet <- pppdist(crimePPP_Theft,crimePPP_Assault,type = "spa")
+# Theft_Dist_Comparison_DF <- distance_table(crimePPP_Theft)
+# Assualt_Dist_Comparison_DF <- distance_table(crimePPP_Assualt)
+# Battery_Dist_Comparison_DF <- distance_table(crimePPP_Battery)
+# Drug_Dist_Comparison_DF <- distance_table(crimePPP_Drug)
+# Damage_Dist_Comparison_DF <- distance_table(crimePPP_Damage)
+```
+
+
+```{r}
+#marks(X)
+#  
+# assualt_density <- density.ppp(crimePPP_Assault,sigma = bw.scott(crimePPP_Assault))
+# theft_density <- density.ppp(crimePPP_Theft,sigma = bw.scott(crimePPP_Theft))
+# 
+# # mean(nndist(crimePPP_Assault,k=1))*1000
+# # summary(crimePPP_Assault)
+# 
+# g12 = Gcross(X, "Assualt","Theft",assualt_density,theft_density,r=NULL,breaks=NULL, correction = "best")
+# plot( g12 )
+# 
+# X
 ```
 
 ### Plotting G-Function to identify whether there is clustering in each crime pattern
