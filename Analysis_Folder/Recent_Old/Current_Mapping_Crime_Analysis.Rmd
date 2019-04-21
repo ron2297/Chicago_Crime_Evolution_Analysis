@@ -29,7 +29,6 @@ knitr::opts_chunk$set(echo = TRUE)
 # in being able to recognize patterns of crime that occur in the city and potentially being able to identify 
 # gang activtiy and its evolution in influencing Chicago Crime.
 #
-# STATE THE DATA SET USED TO IDENTIFY GANG ACTIVITY
 #
 # My primary objectives for the project were to (1) explore the data, (2) perform descriptive analysis and 
 # various forms of clustering and classifying of crime, and (3) and ultimately visualization. 

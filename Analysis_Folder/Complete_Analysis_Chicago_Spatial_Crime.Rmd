@@ -1,0 +1,468 @@
+---
+title: "Complete_Analysis_Chicago_Spatial_Crime"
+author: "Ronald Washington III"
+date: "April 20, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#  Comments by Ronald Washington III ----------------------------------------------------------------
+# The code below was developing as a Senior Research project for DA 401 ("Seminar in Data Analytics")
+# at Denison University. I was inspired to conduct research regarding my home-city Chicago, IL and 
+# perform some investigatory analysis on the evolution of crime within the city from 2001-present day.
+# The data utlized within my research was provided by the Chicago Police Department, and can be found
+# at (https://data.cityofchicago.org/Public-Safety/Crimes-2001-to-present/ijzp-q8t2). This data includes
+# information regarding important information such as date, type of crime, crime code, description, arrest 
+# identification, police district, longitude and latitude, and etc. From this investigation I intend to 
+# discover the distributions of various crimes occuring within Chicago, and hopfully be able to map out 
+# each crime type. From there I wish to perform clustering and classification methods to predict the types 
+# of crimes that can occur in the future. Furthermore, I am particularly interested in being able to 
+# recognize variation and patterns of crime that occur in the city and potentially being able to identify 
+# various crime activtiy and its evolution in influencing Chicago Crime.
+#
+#
+# My primary objectives for the project were to (1) explore the data, (2) perform descriptive analysis and 
+# various forms of clustering and classifying of crime, and (3) and ultimately visualization. 
+#
+# Ronald Washington III (GitHub: https://github.com/ron2297)
+
+# File Descriptions -----------------------------------------------------------------------------------
+#
+# Crime Crime Data for 2001 through Present Day (2019) downloaded from Chicago Data Portal
+# at (https://data.cityofchicago.org/Public-Safety/Crimes-2001-to-present/ijzp-q8t2) (n = 6823075)
+#
+# ZIP Code boundaries in Chicago, downloaded from Chicago Data Portal
+# at (https://data.cityofchicago.org/Facilities-Geographic-Boundaries/Boundaries-ZIP-Codes/gdcf-axmw)
+```
+
+# Importing Libraries
+
+Below consists of the various library utilized within this reserach's analysis on Chicago Crime. The following packages enables the 
+production of various methods of calculating distributions, variances, distances, and the visualizations.
+
+```{r}
+library(chron)
+library(dbscan)
+library(dplyr)
+library(factoextra)
+library(forecast)
+library(fpc)
+library(ggExtra)
+library(ggforce)
+library(ggmap)
+library(ggplot2)
+library(ggpubr)
+library(ggrepel)
+library(ggthemes)
+library(gridExtra)
+library(highcharter)
+library(knitr)
+library(lubridate)
+library(maptools)
+library(plyr)
+library(readr)
+library(rgdal)
+library(rgeos)
+library(scales)
+library(sf)
+library(shapefiles)
+library(sp)
+library(spatstat)
+library(tidyr)
+library(treemap)
+library(xts)
+```
+
+
+# Reading in Data
+
+Here we are reading in our data set of recorded crimes in Chicago starting from 2001. 
+
+```{r eval=FALSE, include=FALSE}
+#crime.data <- read.csv(("C:/Users/Bloody Dachi/Desktop/Crimes_-_2001_to_present (1).csv")) #full data set
+```
+
+It is highly recommended to comment out this code block if for the sake of computational speed and utilize the later coded data set which only utilizes 10,000 rows. However, do realize by using this shortened data set that the results that you find will be different compared to the results presented in the final paper. The visualizations and numbers presented will be highly different due to the shortened number of locations being analyzed.
+```{r}
+crime.data<-read.csv("C:/Users/Bloody Dachi/Desktop/Crimes_-_2001_to_present (1).csv",nrows = 10000)
+write.csv(crime.data, file = "shortened_crime_2001_to_present.csv")
+```
+
+
+
+
+## Pre-processing - Cleaning of Crime Data
+
+```{r eval=FALSE, include=FALSE}
+df_Crime <- subset(crime.data, !duplicated(crime.data$Case.Number)) #Removal of duplicates
+
+#Removing Unneeded Columns
+df_Crime <- subset(df_Crime, select = -c(Case.Number,Description,Domestic,Beat,Ward,Community.Area,FBI.Code,X.Coordinate,Y.Coordinate))
+
+#Creating/Reformatting time columns
+df_Crime$Date <- as.POSIXct(df_Crime$Date,format=" %m/%d/%Y %H:%M") #readable date format
+df_Crime$Time <- times(format(df_Crime$Date," %H:%M:%S")) #inclusion of time column
+df_Crime$DayOfWeek <-wday(as.Date(df_Crime$Date,'%m/%d/%Y'), label=TRUE)
+df_Crime$Month <-months(as.Date(df_Crime$Date,'%m/%d/%Y'))
+df_Crime$Date <- as.POSIXct(strptime(df_Crime$Date,format= " %Y-%m-%d"))#readable date format / without time
+# Separating into time chucks for time analysis which will aid in seasonal analysis
+Time.tag <- chron(times= c("00:00:00", "06:00:00", "12:00:00", "18:00:00","23:59:00"))
+df_Crime$Time.tag <- cut(df_Crime$Time, breaks=Time.tag,labels=c("00-06","06-12", "12-18", "18-00"), include.lowest=TRUE)
+
+# Removal of NAs found within Longitude and Latitutde and Date
+df_Crime <- subset(df_Crime, !is.na(df_Crime$Latitude))
+df_Crime <- subset(df_Crime, !is.na(df_Crime$Date))
+
+# Removing Outliers from Longitude and Latitude
+df_Crime=df_Crime %>% filter(Latitude > 40) 
+df_Crime=df_Crime %>% filter(Longitude > -90) 
+```
+
+### Creating generalized classifications for crime types
+
+Here we have simply taken the numerous categories associated with crimes and have groups them together into generalized types of crimes.
+This has aided in our invesigating by limiting the types of crimes that we are analyzing. 
+
+```{r eval=FALSE, include=FALSE}
+df_Crime$crime <- as.character(df_Crime$Primary.Type)
+
+df_Crime$crime <- ifelse(df_Crime$crime %in% c("CRIM SEXUAL ASSAULT","PROSTITUTION", "SEX OFFENSE"), "SEXUAL", df_Crime$crime)
+
+df_Crime$crime <- ifelse(df_Crime$crime %in% c("MOTOR VEHICLE THEFT"),"VEHICLE", df_Crime$crime)
+
+df_Crime$crime <- ifelse(df_Crime$crime %in% c("GAMBLING", "INTERFERE WITH PUBLIC OFFICER","INTERFERENCE WITH PUBLIC OFFICER" ,"INTIMIDATION",
+                                                     "LIQUOR LAW VIOLATION",  "OBSCENITY" , "NON-CRIMINAL","PUBLIC PEACE VIOLATION", "PUBLIC INDECENCY", 
+                                                     "STALKING" ,  "NON-CRIMINAL (SUBJECT SPECIFIED)" ), "NON-VIOLATION", df_Crime$crime)
+
+df_Crime$crime <- ifelse(df_Crime$crime == "CRIMINAL DAMAGE", "DAMAGE",df_Crime$crime)
+
+df_Crime$crime <- ifelse(df_Crime$crime == "CRIMINAL TRESPASS","TRESPASS", df_Crime$crime)
+
+df_Crime$crime <- ifelse(df_Crime$crime %in% c("NARCOTICS","OTHER NARCOTIC VIOLATION","OTHER NARCOTIC VIOLATION"),
+                                   "DRUG", df_Crime$crime)
+
+df_Crime$crime <- ifelse(df_Crime$crime ==  "DECEPTIVE PRACTICE","FRAUD", df_Crime$crime)
+
+df_Crime$crime <- ifelse(df_Crime$crime %in% c("OTHER OFFENSE", "OTHER OFFENSE"), "OTHER", df_Crime$crime)
+
+df_Crime$crime <- ifelse(df_Crime$crime %in% c("KIDNAPPING", "WEAPONS VIOLATION", "OFFENSE INVOLVING CHILDREN"), "VIOLATION", df_Crime$crime)
+```
+
+
+# Data Exploration
+
+## Aggregated Data Presenting Top 6 Types of Crimes and Relative Distribution 
+
+Based on this research investigating types of crimes in Chicago, we decided it would be best to focus our investigation on the top five
+most occurant types of crimes in Chicago. These crimes concluded to be Theft, Battery, Damage, Drug, and Assualt.
+
+```{r}
+x <- head(data.frame(count=sort(table(df_Crime$crime), decreasing=TRUE)),5)
+x
+```
+
+## Visualizing the Denisty/Frequency Locations of the Top Five Crime Types
+
+Due to us deciding the types of crimes that we are investigating. It would be of interest to us and Chicaog law enforcement of the locations
+that these top crimes most frequently occur. Assault, Battery, and Damage are all found to be spread throughout the city; however, are each
+more densely concentrated in the west and south sides of Chicago. Meanwhile, it is found that drugs are mostly centered on the west side and
+thefts are mostly downtown. This information is interesting because what has been found is that these crimes typically occur in similar locations
+and we will further investigate the types of patterns and distances between these crimes later on in our analysis. 
+
+```{r  fig.height=8, fig.width=16, message=FALSE, warning=FALSE}
+
+bbox = c(-88.0225,41.5949,-87.2713,42.0677)
+chicago_map <- get_map(location = bbox, source = "stamen", maptype = "toner-lite")
+
+map_crime <- function(crime_df) {
+  #filtered <- filter(crime_df, Primary.Type %in% crime)
+  plot <- ggmap(chicago_map, extent='device') + 
+          geom_density2d(data = crime_df%>% filter(Primary.Type %in% df_Crime[df_Crime$crime %in% x[,1],]$Primary.Type ) , 
+          aes(x = Longitude, y = Latitude), size = 0.3) + stat_density2d(data = crime_df%>% filter(Primary.Type %in% df_Crime[df_Crime$crime %in% x[,1],]$Primary.Type ) , 
+          aes(x = Longitude, y = Latitude, fill = ..level.., alpha = ..level..), size = 0.01,
+          bins = 16, geom = "polygon") + scale_fill_gradient(low = "green", high = "red", 
+          guide = FALSE) + scale_alpha(range = c(0, 0.3), guide = FALSE)+
+            facet_wrap_paginate(~ crime, ncol = 3,page =1)
+  return(plot)
+}
+
+# Display Top 6 Crime Types Density Distribution across Chicago
+map_crime(df_Crime[1:1000000,])
+```
+
+## Point Pattern Analysis
+
+Now we are beginning our statistical investigation utlizing Point Pattern Analysis (a form of geo-statistics).
+We have transformed our Longitude and Latitude variables into spatial points for our spatial point analysis which
+will procede with clustering (inhomogenity) test and distance calculations.
+
+```{r include=FALSE}
+coords <- SpatialPoints(df_Crime[,c("Longitude","Latitude")])
+crime_spatial_df <-SpatialPointsDataFrame(coords,df_Crime)
+proj4string(crime_spatial_df) <- CRS("+proj=longlat +ellps=WGS84")
+```
+
+
+```{r}
+plot(crime_spatial_df)
+```
+
+### Setting up Window Size / Formatting points to fit into shape of Chicago
+
+Here I am setting the boundaries of our spatial point to be limited to Chicaog. Even though we have already limited the longitude and latitude
+earlier in our analysis this is performed for safe measure due to it becase set to the limitations that Chicago police department defines.
+
+```{r include=FALSE}
+
+unzip("C:/Users/Bloody Dachi/Documents/Chicago_Crime_Evolution_Analysis/Data_Sets_Files/Boundaries - ZIP Codes.zip", exdir = "C:/Users/Bloody Dachi/Documents/Chicago_Crime_Evolution_Analysis/shapefiles_1", overwrite = TRUE)
+
+chicago_shp <- readOGR(dsn = "C:/Users/Bloody Dachi/Documents/Chicago_Crime_Evolution_Analysis/shapefiles_1",layer = "geo_export_6c977322-0a01-4386-849c-278ec22209fe" )
+
+w3=as.owin(chicago_shp)
+```
+
+### Checking for Inhomogeneity
+
+
+#### Check #1 - Quadrat Distribution
+
+```{r fig.height=8, fig.width=12}
+
+combining_plots <- function(crime_type){
+  crimePPP1 = ppp(crime_spatial_df$Longitude[crime_spatial_df$crime==crime_type],crime_spatial_df$Latitude[crime_spatial_df$crime==crime_type],w3)
+  par(mfrow=c(1,2))
+  
+  qc <- quadratcount(crimePPP1) 
+  plot(qc, main = paste0("Quadratcounting ",crime_type))
+  plot(intensity(qc,image=TRUE), main = paste0("Intensity Point Plotting: ",crime_type), pch = ".", cols =2)
+  
+}
+```
+
+```{r fig.height=8, fig.width=12, warning=FALSE}
+combining_plots("ASSAULT")
+combining_plots("BATTERY")
+combining_plots("DAMAGE")
+combining_plots("DRUG")
+combining_plots("THEFT")
+```
+
+#### Creating Point Patterns for each Crime Type
+
+```{r message=FALSE, warning=FALSE}
+crimePPP_Theft = ppp(crime_spatial_df$Longitude[crime_spatial_df$crime=="THEFT"],crime_spatial_df$Latitude[crime_spatial_df$crime=="THEFT"],w3)
+crimePPP_Battery = ppp(crime_spatial_df$Longitude[crime_spatial_df$crime=="BATTERY"],crime_spatial_df$Latitude[crime_spatial_df$crime=="BATTERY"],w3)
+crimePPP_Damage = ppp(crime_spatial_df$Longitude[crime_spatial_df$crime=="DAMAGE"],crime_spatial_df$Latitude[crime_spatial_df$crime=="DAMAGE"],w3)
+crimePPP_Assault = ppp(crime_spatial_df$Longitude[crime_spatial_df$crime=="ASSAULT"],crime_spatial_df$Latitude[crime_spatial_df$crime=="ASSAULT"],w3)
+crimePPP_Drug = ppp(crime_spatial_df$Longitude[crime_spatial_df$crime=="DRUG"],crime_spatial_df$Latitude[crime_spatial_df$crime=="DRUG"],w3)
+
+```
+
+#### Labeling Crime Patterns 
+
+```{r}
+marks(crimePPP_Assault) = rep("Assualt", npoints(crimePPP_Assault))
+marks(crimePPP_Theft) = rep("Theft", npoints(crimePPP_Theft))
+marks(crimePPP_Battery) = rep("Battery", npoints(crimePPP_Battery))
+marks(crimePPP_Damage) = rep("Damage", npoints(crimePPP_Damage))
+marks(crimePPP_Drug) = rep("Drug", npoints(crimePPP_Drug))
+
+
+```
+
+
+#### Check #2 - Quadrat Monte Carlo Test / Visual Representation of Denisty Distribution
+
+```{r fig.height=8, fig.width=8, message=FALSE, warning=FALSE}
+Inhomo_Test_Check <- function(crime_type){
+  # the lambda argument specifys the density plot for assessing inhomogeneity
+  print((Minhom<-quadrat.test(crime_type, nx = 4, ny = 10, method = "MonteCarlo", lambda = density(crime_type, sigma = .5))))
+  plot(density(crime_type,sigma = .5), main =paste0("Grid counts for inhomogenious denisty: ",crime_type$marks[1]) )
+  plot(Minhom, cex = 0.5, col = "white", add = T)
+}
+
+Inhomo_Test_Check(crimePPP_Theft)
+Inhomo_Test_Check(crimePPP_Battery)
+Inhomo_Test_Check(crimePPP_Damage)
+Inhomo_Test_Check(crimePPP_Assault)
+Inhomo_Test_Check(crimePPP_Drug)
+ 
+```
+
+### Testing for Clustering within Crimes Patterns
+
+
+#### Check #1 - Clark and Evans Test
+
+```{r message=FALSE, warning=FALSE}
+
+#The Clark and Evans (1954) aggregation index R 
+#is a crude measure of clustering or ordering of 
+#a point pattern. It is the ratio of the observed 
+#mean nearest neighbour distance in the pattern to 
+#that expected for a Poisson point process of the 
+#same intensity. A value R > 1 suggests ordering, 
+#while R < 1 suggests clustering.
+ 
+
+Theft_Cluster_Check<- clarkevans(crimePPP_Theft, correction = "guard", clipregion = erosion.owin(ripras(crimePPP_Theft),  r = .1))
+Assualt_Cluster_Check<- clarkevans(crimePPP_Assault, correction = "guard", clipregion = erosion.owin(ripras(crimePPP_Assault),  r = .1))
+Battery_Cluster_Check<- clarkevans(crimePPP_Battery, correction = "guard", clipregion = erosion.owin(ripras(crimePPP_Battery),  r = .1))
+Drug_Cluster_Check<- clarkevans(crimePPP_Drug, correction = "guard", clipregion = erosion.owin(ripras(crimePPP_Drug),  r = .1))
+Damage_Cluster_Check<- clarkevans(crimePPP_Damage, correction = "guard", clipregion = erosion.owin(ripras(crimePPP_Damage),  r = .1))
+
+crime_cluster_check_df <- data.frame(Assualt = as.numeric(0),Theft = as.numeric(0),Battery = as.numeric(0),Drug = as.numeric(0),Damage = as.numeric(0))
+  
+crime_cluster_check_df$Theft <- Theft_Cluster_Check
+crime_cluster_check_df$Assualt <- Assualt_Cluster_Check
+crime_cluster_check_df$Battery <- Battery_Cluster_Check
+crime_cluster_check_df$Drug <- Drug_Cluster_Check
+crime_cluster_check_df$Damage <- Damage_Cluster_Check
+crime_cluster_check_df
+```
+
+#### Check #2 - Plotting G-Function to identify whether there is clustering in each crime pattern
+
+```{r message=FALSE, warning=FALSE}
+#The nearest neighbour distance distribution function (also called the ``event-to-event'' or ``inter-event'' distribution) of a point process X is the cumulative distribution function G the distance from a typical random point of X to the nearest other point of X.
+Gest_Cluster_Graph <- function(crime_type){
+  # the lambda argument specifys the density plot for assessing inhomogeneity
+  G <- Gest(crime_type)
+  plot(G, main =paste0("G-Function: ",crime_type$marks[1]))
+}
+par(mfrow=c(2,3))
+Gest_Cluster_Graph(crimePPP_Theft)
+Gest_Cluster_Graph(crimePPP_Battery)
+Gest_Cluster_Graph(crimePPP_Damage)
+Gest_Cluster_Graph(crimePPP_Assault)
+Gest_Cluster_Graph(crimePPP_Drug)
+```
+
+### Calculating Distance (Nearest Neighborhood) of Crimes Patterns
+
+```{r}
+#Given two sets of points, this function computes 
+#the Euclidean distance from each point in the first 
+#set to each point in the second set, and returns a 
+#matrix containing these distances. From this we take 
+#the average of the distances in order to learn the 
+#average distance between the types of crimes to each 
+#other. If the value is higher than the rest this means 
+#that these crimes occur farther away from each other.
+#Please use [1:10000] when using the full data set.
+
+cross_distance_table <- function(crime_type_dist){
+  crime_Theft_Dist <- mean(crossdist(crime_type_dist,crimePPP_Theft))
+  #crime_Theft_Dist <- mean(crossdist(crime_type_dist[1:10000],crimePPP_Theft[1:10000]))
+  #print(paste0("Theft Complete \n "))
+  crime_Assualt_Dist <- mean(crossdist(crime_type_dist,crimePPP_Assault))
+  #crime_Assualt_Dist <- mean(crossdist(crime_type_dist[1:10000],crimePPP_Assault[1:10000]))
+  #print(paste0("Assualt Complete \n "))
+  crime_Battery_Dist <- mean(crossdist(crime_type_dist,crimePPP_Battery))
+  #crime_Battery_Dist <- mean(crossdist(crime_type_dist[1:10000],crimePPP_Battery[1:10000]))
+  #print(paste0("Battery Complete \n "))
+  crime_Drug_Dist <- mean(crossdist(crime_type_dist,crimePPP_Drug))
+  #crime_Drug_Dist <- mean(crossdist(crime_type_dist[1:10000],crimePPP_Drug[1:10000]))
+  #print(paste0("Drug Complete \n "))
+  crime_Damage_Dist <- mean(crossdist(crime_type_dist,crimePPP_Damage))
+  #crime_Damage_Dist <- mean(crossdist(crime_type_dist[1:10000],crimePPP_Damage[1:10000]))
+  #print(paste0("Damage Complete \n "))
+  
+  crime_distance_df <- data.frame(Assualt = as.numeric(0),Theft = as.numeric(0),Battery = as.numeric(0),Drug = as.numeric(0),Damage = as.numeric(0))
+  
+  crime_distance_df$Theft <- crime_Theft_Dist
+  crime_distance_df$Assualt <- crime_Assualt_Dist
+  crime_distance_df$Battery <- crime_Battery_Dist
+  crime_distance_df$Drug <- crime_Drug_Dist
+  crime_distance_df$Damage <- crime_Damage_Dist
+  #print(paste0("Ready to make DataFrame  \n "))
+  
+  crime_distance_df
+}
+
+
+Theft_Dist_Comparison_DF <- cross_distance_table(crimePPP_Theft)
+Assualt_Dist_Comparison_DF <- cross_distance_table(crimePPP_Assault)
+Battery_Dist_Comparison_DF <- cross_distance_table(crimePPP_Battery)
+Drug_Dist_Comparison_DF <- cross_distance_table(crimePPP_Drug)
+Damage_Dist_Comparison_DF <- cross_distance_table(crimePPP_Damage)
+
+
+
+Theft_Dist_Comparison_DF
+Assualt_Dist_Comparison_DF
+Battery_Dist_Comparison_DF
+Drug_Dist_Comparison_DF
+Damage_Dist_Comparison_DF
+
+
+```
+
+## DBSCAN Analysis
+
+
+```{r  fig.height=8, fig.width=16, message=FALSE, warning=FALSE}
+##Please use [1:10000] when using the full data set.
+
+kNN_Plots_neighbor_Plots <- function(crime_type_dist){
+  #start_time <- Sys.time()
+  
+  #kNN_Plots<- dbscan::kNNdistplot(crossdist(crime_type_dist[1:10000],crime_type_dist[1:10000]), k =  4)
+  kNN_Plots<- dbscan::kNNdistplot(crossdist(crime_type_dist,crime_type_dist), k =  4)
+  
+  title(main = paste0("kNNdistplot Clustering: ",crime_type_dist$marks[1]))
+  
+  abline(h = 0.4, lty = 2) 
+  
+
+}
+
+plot_list = list(kNN_Plots_neighbor_Plots(crimePPP_Theft),kNN_Plots_neighbor_Plots(crimePPP_Battery),
+                 kNN_Plots_neighbor_Plots(crimePPP_Damage),kNN_Plots_neighbor_Plots(crimePPP_Assault),
+                 kNN_Plots_neighbor_Plots(crimePPP_Drug))
+
+
+par(mfrow=c(2,3))
+plot(list(kNN_Plots_neighbor_Plots(crimePPP_Theft),kNN_Plots_neighbor_Plots(crimePPP_Battery),
+                 kNN_Plots_neighbor_Plots(crimePPP_Damage),kNN_Plots_neighbor_Plots(crimePPP_Assault),
+                 kNN_Plots_neighbor_Plots(crimePPP_Drug)))
+
+
+```
+
+```{r  fig.height=8, fig.width=16, message=FALSE, warning=FALSE}
+##Please use [1:6000] when using the full data set.
+
+DBSCAN_Cluster_Plots <- function(crime_type_dist){
+  start_time <- Sys.time()
+  
+  
+  #res.db <- dbscan::dbscan(crossdist(crime_type_dist[1:6000],crime_type_dist[1:6000]), 0.4, 4)
+  res.db <- dbscan::dbscan(crossdist(crime_type_dist,crime_type_dist), 0.4, 4)
+  
+  print(res.db)
+  #tesing_Shit<-fviz_cluster(res.db, crossdist(crime_type_dist[1:6000],crime_type_dist[1:6000]), geom = "point",main = paste0("DBSCAN Clustering: ",crime_type_dist$marks[1]), ggtheme = theme_minimal(),show_labels = FALSE)
+  tesing_Shit<-fviz_cluster(res.db, crossdist(crime_type_dist,crime_type_dist), 
+                            geom = "point",main = paste0("DBSCAN Clustering: ",crime_type_dist$marks[1]), 
+                            ggtheme = theme_minimal(),show_labels = FALSE)
+  
+  
+  
+  end_time <- Sys.time()
+  print(end_time - start_time)
+  plot(tesing_Shit, main =paste0("DBSCAN Clustering: ",crime_type_dist$marks[1]) )
+}
+
+
+
+plot_list = list(DBSCAN_Cluster_Plots(crimePPP_Theft),DBSCAN_Cluster_Plots(crimePPP_Battery),
+                 DBSCAN_Cluster_Plots(crimePPP_Damage),DBSCAN_Cluster_Plots(crimePPP_Assault),
+                 DBSCAN_Cluster_Plots(crimePPP_Drug))
+
+ggarrange(plotlist=plot_list, widths = c(3,3), heights = 45)
+
+```

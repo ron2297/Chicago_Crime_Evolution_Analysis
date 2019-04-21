@@ -211,9 +211,9 @@ crime_cluster_check_df
 Gest_Cluster_Graph <- function(crime_type){
   # the lambda argument specifys the density plot for assessing inhomogeneity
   G <- Gest(crime_type)
-  plot(G)
+  plot(G, main =paste0("G-Function: ",crime_type$marks[1]))
 }
-
+par(mfrow=c(2,3))
 Gest_Cluster_Graph(crimePPP_Theft)
 Gest_Cluster_Graph(crimePPP_Battery)
 Gest_Cluster_Graph(crimePPP_Damage)
@@ -311,7 +311,11 @@ plot_list = list(kNN_Plots_neighbor_Plots(crimePPP_Theft),kNN_Plots_neighbor_Plo
                  kNN_Plots_neighbor_Plots(crimePPP_Damage),kNN_Plots_neighbor_Plots(crimePPP_Assault),
                  kNN_Plots_neighbor_Plots(crimePPP_Drug))
 #plot_list = list(kNN_Plots_neighbor_Plots(crimePPP_Theft))
-#ggarrange(plotlist=plot_list, widths = c(3,3), heights = 45)
+#ggarrange(plotlist=plot_list)
+par(mfrow=c(2,3))
+plot(list(kNN_Plots_neighbor_Plots(crimePPP_Theft),kNN_Plots_neighbor_Plots(crimePPP_Battery),
+                 kNN_Plots_neighbor_Plots(crimePPP_Damage),kNN_Plots_neighbor_Plots(crimePPP_Assault),
+                 kNN_Plots_neighbor_Plots(crimePPP_Drug)))
 #abline(h = 0.25, lty = 2)
 #print(w3)
 #figure <- ggarrange(DBSCAN_Cluster_Plots(crimePPP_Theft),DBSCAN_Cluster_Plots(crimePPP_Battery),DBSCAN_Cluster_Plots(crimePPP_Damage),DBSCAN_Cluster_Plots(crimePPP_Assault),DBSCAN_Cluster_Plots(crimePPP_Drug),ncol = 3, nrow = 3)
